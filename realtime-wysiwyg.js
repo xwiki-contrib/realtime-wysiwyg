@@ -225,7 +225,7 @@ var makeHTMLOperation = (function () {
     var getTagAtReverseOffset = function (data, roffset)
     {
         var offset = data.length - roffset;
-        var end = oldval.indexOf('>', offset)
+        var end = data.indexOf('>', offset)
         if (offset > data.length || end < offset) { throw new Error(); }
         return data.substring(offset, end);
     };
@@ -255,9 +255,9 @@ var makeHTMLOperation = (function () {
         }
         if (lastTag === '') { throw new Error(); }
 
-        for (var i = 0; i < 1000; i++) {
-            // fwdIdx-3 because lastIndex points to the first letter
-            // in a tag which might be an <abc> or an </abc>
+        for (var i = 0;; i++) {
+            // fwdIdx-3 because fwdIdx points to the first letter
+            // in a tag which might be an <abc> or a </abc>
             if (fwdIdx < 3) { throw new Error(); }
             fwdIdx = data.lastIndexOf('<', fwdIdx-3);
             if (fwdIdx < 0) { throw new Error(); }
@@ -277,18 +277,21 @@ var makeHTMLOperation = (function () {
                 if (PARANOIA && !isVoidTag(tag)) { throw new Error(); }
             }
 //console.log(fwdIdx + '  [' + data + ']');
+            if (i > 1000) { throw new Error("infiniloop"); }
         }
-        throw new Error("unreachable");
     };
 
-    var getBeginningOfElement = function (data, lastIdx, offsetStack)
+    var getBeginningOfElement = function (data, offsetStack)
     {
         var offsetStackOrigLen = offsetStack.length;
         if (offsetStackOrigLen === 0) { throw new Error(); }
+        var origLastIdx = offsetStack[offsetStack.length-1];
+        var lastIdx = origLastIdx;
         do {
             lastIdx = getPreviousTagIndex(data, lastIdx, offsetStack);
-        } while (offsetStack.length > offsetStackOrigLen);
+        } while (offsetStack.length >= offsetStackOrigLen);
         if (offsetStack.length !== offsetStackOrigLen - 1) { throw new Error(); }
+        offsetStack.push(origLastIdx);
         return lastIdx;
     };
 
@@ -296,8 +299,10 @@ var makeHTMLOperation = (function () {
     {
         if (oldval === newval) { return; }
 
-oldval = '<body><div>'+oldval+'</div></body>';
-newval = '<body><div>'+newval+'</div></body>';
+        // TODO(cjd): Ideally we would be able to calculate diffs over innerHTML but this
+        //            algorithm is tied to the assumption that there is a root element.
+        oldval = '<body>'+oldval+'</body>';
+        newval = '<body>'+newval+'</body>';
 
         var i = 0;
         var begin = 0;
@@ -306,9 +311,7 @@ newval = '<body><div>'+newval+'</div></body>';
             begin = next;
             next += oldval.substring(begin+1).search(/<[^\/]/) + 1;
             if (i++ > 1000) { throw new Error(); }
-        } while (i++ < 1000
-                && next !== begin
-                && oldval.substring(begin, next) === newval.substring(begin, next));
+        } while (next !== begin && oldval.substring(begin, next) === newval.substring(begin, next));
         // <body><div><p></p><p><br><tt>[change</tt><br> <em>here]</em></p><br><p></p></div></body>
         //                          ^~~~~ begin pointer here
         console.log(oldval);
@@ -324,24 +327,42 @@ newval = '<body><div>'+newval+'</div></body>';
             if (i++ > 1000) { throw new Error(); }
         } while (reverseSubstring(oldval, end, next) === reverseSubstring(newval, end, next));
         // <body><div><p></p><p><br><tt>[change</tt><br> <em>here]</em></p><br><p></p></div></body>
-        //                                                        ^~~~~ end pointer here
-        console.log(oldval);
-        console.log(new Array(oldval.length + 1 - end).join(' ') + '^~~~~~');
+        //                                                          ^~~~~ end pointer here
 
-        if (offsetStack[offsetStack.length-1] > end) { offsetStack.pop(); }
-        if (offsetStack[offsetStack.length-1] > end) { throw new Error(); }
+        //console.log(oldval);
+        //console.log(new Array(oldval.length + 1 - end).join(' ') + '^~~~~~');
+        //console.log(oldval);
+        //console.log(new Array(oldval.length + 1 - next).join(' ') + '^~~~~~');
 
-//        var offsetStackClone = [];
-//        offsetStackClone.push.apply(null, offsetStack);
+        // The next tag might have been the beginning of the end tag in which case it was popped from
+        // the stack, if so then lets check and push it again.
+        if (offsetStack[offsetStack.length-1] !== end) {
+            if (offsetStack[offsetStack.length-1] > end) {
+                // The next tag encountered was another end tag.
+                offsetStack.pop();
+                if (offsetStack[offsetStack.length-1] !== end) { throw new Error(); }
+            } else {
+                // The next tag encountered was the begin tag matching "end".
+                offsetStack.push(end);
+            }
+        }
 
-        // oldval
-        next = offsetStack[offsetStack.length-1];
+        // Now find the begin tag which matches "end"
+        // but if that tag is not before the beginning of all changed material, we pop one
+        // element from the stack and try to find the beginning of the parent.
         i = 0;
-        do {
-            end = offsetStack[offsetStack.length-1];
-            next = getBeginningOfElement(oldval, next, offsetStack);
+        for (;;) {
+            next = getBeginningOfElement(oldval, offsetStack);
             if (i++ > 1000) { throw new Error(); }
-        } while (next + 1 < (oldval.length - begin));
+            if (next + 1 >= (oldval.length - begin)) {
+                // We found a tag level where all changes fall between begin and end.
+                // move end forward to match.
+                end = offsetStack[offsetStack.length-1];
+                break;
+            }
+            // up one level.
+            offsetStack.pop();
+        }
         begin = oldval.length - next;
         // <body><div><p></p><p><br><tt>[change</tt><br> <em>here]</em></p><br><p></p></div></body>
         //                    ^~~~~ next                                 ^~~~~ end
@@ -351,7 +372,12 @@ newval = '<body><div>'+newval+'</div></body>';
             if (tag !== oldval.substr(begin, tag.length)) { throw new Error(); }
         }
         begin = oldval.indexOf('>', begin)+1;
+
+        // end is pointing to the first letter in the close tag, back it off to the bracket.
         end += 3;
+
+        // because end is calculated off of the length of the string, it's off by one.
+        end--;
 
         if (PARANOIA) {
             // check begin text and end text match
@@ -384,6 +410,11 @@ newval = '<body><div>'+newval+'</div></body>';
                 throw new Error();
             }
         }
+
+        // Account for the fact that we wrapped the oldval and newval in <body> tags
+        out.offset -= 6;
+
+console.log(out);
 
         return out;
     };
