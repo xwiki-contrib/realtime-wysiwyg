@@ -1,8 +1,8 @@
 # Realtime WYSIWYG Editor Binding
 
-This binding makes use of the [chainpad] realtime editor engine and binds
-to the [XWiki WYSIWYG] editor. It is currently a work-in-progress but to try it out,
-install use the [XWiki Realtime Backend] from the Extension Manager and build the .xar file
+This binding makes use of the [chainpad][chainpad] realtime editor engine and binds
+to the [XWiki WYSIWYG][wysiwyg] editor. It is currently a work-in-progress but to try it out,
+install use the [XWiki Realtime Backend][rtbackend] from the Extension Manager and build the .xar file
 as follows:
 
     # first make sure you have an up-to-date version of xwiki-tools
@@ -22,6 +22,6 @@ Or generate a Maven compatible build using:
     ./do --mvn
 
 
-[chainpad](https://github.com/xwiki-contrib/chainpad)
-[XWiki WYSIWYG](http://extensions.xwiki.org/xwiki/bin/view/Extension/WYSIWYG+Editor+Module)
-[XWiki Realtime Backend](http://extensions.xwiki.org/xwiki/bin/view/Extension/RtBackend)
+[chainpad]: https://github.com/xwiki-contrib/chainpad
+[wysiwyg]: http://extensions.xwiki.org/xwiki/bin/view/Extension/WYSIWYG+Editor+Module
+[rtbackend]: http://extensions.xwiki.org/xwiki/bin/view/Extension/RtBackend
