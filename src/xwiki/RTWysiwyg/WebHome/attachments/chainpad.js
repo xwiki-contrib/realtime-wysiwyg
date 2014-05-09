@@ -173,22 +173,20 @@ var invert = Patch.invert = function (patch, doc)
     return rpatch;
 };
 
-var simplify = Patch.simplify = function (patch, doc, atomicSectionMarkers)
+var simplify = Patch.simplify = function (patch, doc, operationSimplify)
 {
     if (Common.PARANOIA) {
         check(patch);
-        if (atomicSectionMarkers) {
-            Common.assert(typeof(atomicSectionMarkers) === 'object');
-        }
         Common.assert(typeof(doc) === 'string');
         Common.assert(Sha.hex_sha256(doc) === patch.parentHash);
     }
+    operationSimplify = operationSimplify || Operation.simplify;
     var spatch = create(patch.parentHash);
     var newDoc = doc;
     var outOps = [];
     var j = 0;
     for (var i = patch.operations.length-1; i >= 0; i--) {
-        outOps[j] = Operation.simplify(patch.operations[i], newDoc, atomicSectionMarkers);
+        outOps[j] = operationSimplify(patch.operations[i], newDoc, Operation.simplify);
         if (outOps[j]) {
             newDoc = Operation.apply(outOps[j], newDoc);
             j++;
@@ -555,14 +553,7 @@ var ZERO =           '0000000000000000000000000000000000000000000000000000000000
 var enterChainPad = function (realtime, func) {
     return function () {
         if (realtime.failed) { return; }
-        //try {
-            func.apply(null, arguments);
-        /*} catch (err) {
-console.log(err.stack);
-            realtime.failed = true;
-            err.message += ' (' + realtime.userName + ')';
-            throw err;
-        }*/
+        func.apply(null, arguments);
     };
 };
 
@@ -601,7 +592,7 @@ var sync = function (realtime) {
     }
 
     realtime.uncommitted = Patch.simplify(
-        realtime.uncommitted, realtime.authDoc, realtime.config.atomicSectionMarkers);
+        realtime.uncommitted, realtime.authDoc, realtime.config.operationSimplify);
 
     if (realtime.uncommitted.operations.length === 0) {
         //debug(realtime, "No data to sync to the server, sleeping");
@@ -966,7 +957,7 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
     }
 
     var simplePatch =
-        Patch.simplify(patch, authDocAtTimeOfPatch, realtime.config.atomicSectionMarkers);
+        Patch.simplify(patch, authDocAtTimeOfPatch, realtime.config.operationSimplify);
     if (!Patch.equals(simplePatch, patch)) {
         debug(realtime, "patch [" + msg.hashOf + "] can be simplified");
         if (Common.PARANOIA) { check(realtime); }
@@ -979,7 +970,7 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
     patch.inverseOf.inverseOf = patch;
 
     realtime.uncommitted = Patch.simplify(
-        realtime.uncommitted, realtime.authDoc, realtime.config.atomicSectionMarkers);
+        realtime.uncommitted, realtime.authDoc, realtime.config.operationSimplify);
     var oldUserInterfaceContent = Patch.apply(realtime.uncommitted, realtime.authDoc);
     if (Common.PARANOIA) {
         Common.assert(oldUserInterfaceContent === realtime.userInterfaceContent);
@@ -1002,7 +993,7 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
 
     uncommittedPatch = Patch.merge(uncommittedPatch, realtime.uncommitted);
     uncommittedPatch = Patch.simplify(
-        uncommittedPatch, oldUserInterfaceContent, realtime.config.atomicSectionMarkers);
+        uncommittedPatch, oldUserInterfaceContent, realtime.config.operationSimplify);
 
     realtime.uncommittedDocLength += Patch.lengthChange(uncommittedPatch);
     realtime.best = msg;
@@ -1170,74 +1161,37 @@ var invert = Operation.invert = function (op, doc) {
     return rop;
 };
 
-var equals = Operation.equals = function (opA, opB) {
-    return (opA.toRemove === opB.toRemove
-        && opA.toInsert === opB.toInsert
-        && opA.offset === opB.offset);
-};
-
-var simplify = Operation.simplify = function (origOp, doc, atomicSectionMarkers) {
+var simplify = Operation.simplify = function (op, doc) {
     if (Common.PARANOIA) {
-        check(origOp, doc.length);
-        if (atomicSectionMarkers) {
-            Common.assert(typeof(atomicSectionMarkers) === 'object');
-        }
+        check(op);
         Common.assert(typeof(doc) === 'string');
+        Common.assert(op.offset + op.toRemove <= doc.length);
     }
-    var rop = invert(origOp, doc);
-
-    //if (equals(origOp, rop)) { return null; }
-
-    var op = clone(origOp);
+    var rop = invert(op, doc);
+    op = clone(op);
 
     var minLen = Math.min(op.toInsert.length, rop.toInsert.length);
-    var i = 0;
-    var atomicSectionBegins = -1;
-    for (; i < minLen && rop.toInsert[i] === op.toInsert[i]; i++) {
-        if (!atomicSectionMarkers) { continue; }
-        if (rop.toInsert[i] === atomicSectionMarkers.begin) {
-            Common.assert(atomicSectionBegins === -1);
-            atomicSectionBegins = i;
-        } else if (rop.toInsert[i] === atomicSectionMarkers.end) {
-            Common.assert(atomicSectionBegins !== -1);
-            atomicSectionBegins = -1;
-        }
-    }
-    if (atomicSectionBegins !== -1) {
-        i = atomicSectionBegins;
-        atomicSectionBegins = -1;
-    }
-
+    var i;
+    for (i = 0; i < minLen && rop.toInsert[i] === op.toInsert[i]; i++) ;
     op.offset += i;
     op.toRemove -= i;
     op.toInsert = op.toInsert.substring(i);
     rop.toInsert = rop.toInsert.substring(i);
 
-    if (rop.toInsert.length !== op.toInsert.length) {
-        return op;
+    if (rop.toInsert.length === op.toInsert.length) {
+        for (i = rop.toInsert.length-1; i >= 0 && rop.toInsert[i] === op.toInsert[i]; i--) ;
+        op.toInsert = op.toInsert.substring(0, i+1);
+        op.toRemove = i+1;
     }
-
-    for (i = rop.toInsert.length-1; i >= 0 && rop.toInsert[i] === op.toInsert[i]; i--) {
-        if (!atomicSectionMarkers) { continue; }
-        if (rop.toInsert[i] === atomicSectionMarkers.end) {
-            Common.assert(atomicSectionBegins === -1);
-            atomicSectionBegins = i;
-        } else if (rop.toInsert[i] === atomicSectionMarkers.begin) {
-            Common.assert(atomicSectionBegins !== -1);
-            atomicSectionBegins = -1;
-        }
-    }
-
-    if (atomicSectionBegins !== -1) { i = atomicSectionBegins; }
-    op.toInsert = op.toInsert.substring(0, i+1);
-    op.toRemove = i+1;
 
     if (op.toRemove === 0 && op.toInsert.length === 0) { return null; }
-if ( (op.toInsert.match('<') || []).length !== (op.toInsert.match('>') || []).length ) {
-console.log(op);
-throw new Error();
-}
     return op;
+};
+
+var equals = Operation.equals = function (opA, opB) {
+    return (opA.toRemove === opB.toRemove
+        && opA.toInsert === opB.toInsert
+        && opA.offset === opB.offset);
 };
 
 var lengthChange = Operation.lengthChange = function (op)

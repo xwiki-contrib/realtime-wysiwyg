@@ -14,7 +14,7 @@
     };
     // END_VELOCITY
 
-    for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
+    for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ('?cb='+new Date().getTime())); }
     require.config({paths:PATHS});
 
     // remove to debug

@@ -18,6 +18,9 @@ define(function () {
     var module = { exports: {} };
     var PARANOIA = true;
 
+    var debug = function (x) { };
+    debug = function (x) { console.log(x); };
+
     var drillDown = function (node)
     {
         while (node.childNodes[0]) { node = node.childNodes[0]; }
@@ -69,17 +72,36 @@ define(function () {
         return e.childNodes[0];
     };
 
-    // TODO(cjd): is it possible to have a <tag attrib="val>ue"> ?
-    //            in chrome the answer is no.
+    var indexOfSkipQuoted = function (haystack, needle)
+    {
+        var os = 0;
+        for (;;) {
+            var dqi = haystack.indexOf('"');
+            var sqi = haystack.indexOf("'");
+            var needlei = haystack.indexOf(needle);
+            if (needlei === -1) { return -1; }
+            if (dqi > -1 && dqi < sqi && dqi < needlei) {
+                dqi = haystack.indexOf('"', dqi+1);
+                if (dqi === -1) { throw new Error(); }
+                haystack = haystack.substring(dqi);
+                os += dqi;
+            } else if (sqi > -1 && sqi < needlei) {
+                sqi = haystack.indexOf('"', sqi+1);
+                if (sqi === -1) { throw new Error(); }
+                haystack = haystack.substring(sqi);
+                os += sqi;
+            } else {
+                return needlei + os;
+            }
+        }
+    };
+
     var tagWidth = function (nodeOuterHTML)
     {
-        if (nodeOuterHTML.length < 2
-            || nodeOuterHTML[1] === '!'
-            || nodeOuterHTML[0] !== '<')
-        {
+        if (nodeOuterHTML.length < 2 || nodeOuterHTML[1] === '!' || nodeOuterHTML[0] !== '<') {
             return 0;
         }
-        return nodeOuterHTML.indexOf('>') + 1;
+        return indexOfSkipQuoted(nodeOuterHTML, '>') + 1;
     };
 
     var getInnerHTML = function (node)
@@ -126,6 +148,11 @@ define(function () {
         return idx;
     };
 
+    var patchString = function (oldString, offset, toRemove, toInsert)
+    {
+        return oldString.substring(0, offset) + toInsert + oldString.substring(offset + toRemove);
+    };
+
     var getNodeAtOffset = function (docText, offset, dom)
     {
         if (PARANOIA && dom.childNodes.length && docText !== dom.innerHTML) { throw new Error(); }
@@ -170,7 +197,7 @@ define(function () {
     };
 
 
-    var makeTextOperation = function(oldval, newval)
+    var makeTextOperation = window.makeTextOperation = function(oldval, newval)
     {
         if (oldval === newval) { return; }
 
@@ -178,7 +205,9 @@ define(function () {
         for (; oldval[begin] === newval[begin]; begin++) ;
 
         var end = 0;
-        for (var oldI = oldval.length, newI = newval.length; oldval[--oldI] === newval[--newI]; end++) ;
+        for (var oldI = oldval.length, newI = newval.length;
+             oldval[--oldI] === newval[--newI];
+             end++) ;
 
         if (end >= oldval.length - begin) { end = oldval.length - begin; }
         if (end >= newval.length - begin) { end = newval.length - begin; }
@@ -192,113 +221,125 @@ define(function () {
 
     var makeHTMLOperation = (function () {
 
-        // Used exclusively for error checking
-        var isVoidTag = function (tag)
+        var VOID_TAG_REGEX = new RegExp('^(' + [
+            'area',
+            'base',
+            'br',
+            'col',
+            'hr',
+            'img',
+            'input',
+            'link',
+            'meta',
+            'param',
+            'command',
+            'keygen',
+            'source',
+        ].join('|') + ')$');
+
+        // Get the offset of the previous open/close/void tag.
+        // returns the offset of the opening angle bracket.
+        var getPreviousTagIdx = function (data, idx)
         {
-            var ix = tag.indexOf(' ');
-            if (ix > -1) {
-                tag = tag.substring(0, ix);
+            if (idx === 0) { return -1; }
+            idx = data.lastIndexOf('>', idx);
+            // The html tag from hell:
+            // < abc def="g<hi'j >" k='lm"nopw>"qrstu"<vw'   >
+            for (;;) {
+                var mch = data.substring(0,idx).match(/[<"'][^<'"]*$/);
+                if (!mch) { return -1; }
+                if (mch[0][0] === '<') { return mch.index; }
+                idx = data.lastIndexOf(mch[0][0], mch.index-1);
             }
-            switch (tag) {
-                case 'area':
-                case 'base':
-                case 'br':
-                case 'col':
-                case 'hr':
-                case 'img':
-                case 'input':
-                case 'link':
-                case 'meta':
-                case 'param':
-                case 'command':
-                case 'keygen':
-                case 'source':
-                    return true;
-            }
-            return false;
         };
 
-        var INIT_TAG = 'SHOULD NEVER HAPPEN';
-        var getPreviousTagIndex = function (data, idx, offsetStack)
+        /**
+         * Get the name of an HTML tag with leading / if the tag is an end tag.
+         *
+         * @param data the html text
+         * @param offset the index of the < bracket.
+         * @return the tag name with possible leading slash.
+         */
+        var getTagName = function (data, offset)
         {
-            var lastTag = INIT_TAG;
-            if (offsetStack.length > 1) {
-                var lastOffset = offsetStack[offsetStack.length-1];
-                // we add 2 because lastOffsets are always at the beginning of a </endtag>
-                lastTag = data.substring(lastOffset+2, data.indexOf('>', lastOffset));
-                if (lastTag === '') { throw new Error(); }
-            }
+            if (data[offset] !== '<') { throw new Error(); }
+            // Match ugly tags like <   /   xxx>
+            // or <   xxx  y="z" >
+            var m = data.substring(offset).match(/^(<[\s\/]*)([a-zA-Z0-9_-]+)/);
+            if (!m) { throw new Error("could not get tag name"); }
+            if (m[1].indexOf('/') !== -1) { return '/'+m[2]; }
+            return m[2];
+        };
 
-            for (var i = 0;; i++) {
-                if (idx === 0) {
-                    idx--;
-                } else {
-                    idx = data.lastIndexOf('<', idx-1);
+        /**
+         * Get the previous non-void opening tag.
+         *
+         * @param data the document html
+         * @param ctx an empty map for the first call, the same element thereafter.
+         * @return an array containing the offset of the open bracket for the begin tag and the
+         *         the offset of the open bracket for the matching end tag.
+         */
+        var getPreviousNonVoidTag = function (data, ctx)
+        {
+            for (;;) {
+                if (typeof(ctx.offsets) === 'undefined') {
+                    // ' ' is an invalid html element name so it will never match anything.
+                    ctx.offsets = [ { idx: data.length, name: ' ' } ];
+                    ctx.idx = data.length;
                 }
-                if (idx < 0) {
-                    if (offsetStack.length === 1) {
-                        return -1;
-                    }
+
+                var prev = ctx.idx = getPreviousTagIdx(data, ctx.idx);
+                if (prev === -1) {
+                    if (ctx.offsets.length > 1) { throw new Error(); }
+                    return [ 0, data.length ];
+                }
+                var prevTagName = getTagName(data, prev);
+
+                if (prevTagName[0] === '/') {
+                    ctx.offsets.push({ idx: prev, name: prevTagName.substring(1) });
+                } else if (prevTagName === ctx.offsets[ctx.offsets.length-1].name) {
+                    var os = ctx.offsets.pop();
+                    return [ prev, os.idx ];
+                } else if (!VOID_TAG_REGEX.test(prevTagName)) {
                     throw new Error();
                 }
-                if (data[idx+1] === '/') {
-                    if (offsetStack[offsetStack.length-1] === idx) { throw new Error(); }
-                    offsetStack.push(idx);
-                    return idx;
-                } else {
-                    var tag = data.substring(idx+1, data.indexOf('>', idx));
-                    var endOfTag = tag.indexOf(' ');
-                    if (endOfTag > -1) { tag = tag.substring(0, endOfTag); }
-                    if (tag === lastTag) {
-                        offsetStack.pop();
-                        return idx;
-                    }
-                    if (PARANOIA && !isVoidTag(tag)) { throw new Error(); }
-                }
-                if (i > 1000) { throw new Error("infiniloop"); }
             }
         };
 
-        var makeHTMLOperation = function (oldval, newval)
+        var makeOperation = function (oldval, newval)
         {
             var op = makeTextOperation(oldval, newval);
             if (!op) { return; }
 
             var end = op.offset + op.toRemove;
-
-            i = 0;
-            var begin = oldval.length;
-            var lastEnd;
-            var offsetStack = [oldval.length];
+            var lastTag;
+            var tag;
+            var ctx = {};
             do {
-                lastEnd = offsetStack[offsetStack.length-1];
-                begin = getPreviousTagIndex(oldval, begin, offsetStack);
-                if (begin === -1) {
-                    begin = 0;
-                    lastEnd = oldval.length;
-                    break;
+                lastTag = tag;
+                tag = getPreviousNonVoidTag(oldval, ctx);
+            } while (tag[0] > op.offset || tag[1] < end);
+
+            if (lastTag
+                && end < lastTag[0]
+                && op.offset > tag[0] + tagWidth(oldval.substring(tag[0])))
+            {
+                // plain old text operation.
+                if (op.toRemove && oldval.substr(op.offset, op.toRemove).indexOf('<') !== -1) {
+                    throw new Error();
                 }
-                if (i++ > 1000) { throw new Error(); }
-            } while (!(offsetStack.length % 2)
-                || begin > op.offset
-                || lastEnd < end);
+                return op;
+            }
 
-            var rend = oldval.length - lastEnd;
-
-            var out = {
-                offset: begin,
-                toRemove: lastEnd - begin,
-                toInsert: newval.slice(begin, newval.length - rend)
-            };
-
+            op.offset = tag[0];
+            op.toRemove = tag[1] - tag[0];
+            op.toInsert = newval.slice(tag[0], newval.length - (oldval.length - tag[1]));
 
             if (PARANOIA) {
                 // simulate running the patch.
-                var res = (oldval.substring(0, out.offset)
-                    + out.toInsert
-                    + oldval.substring(out.offset + out.toRemove));
+                var res = patchString(oldval, op.offset, op.toRemove, op.toInsert);
                 if (res !== newval) {
-                    console.log(out);
+                    console.log(op);
                     console.log(oldval);
                     console.log(newval);
                     console.log(res);
@@ -306,28 +347,30 @@ define(function () {
                 }
 
                 // check matching bracket count
-                var removeText = oldval.substring(out.offset, out.offset + out.toRemove);
+                // TODO(cjd): this can fail even if the patch is valid because of brackets in
+                //            html attributes.
+                var removeText = oldval.substring(op.offset, op.offset + op.toRemove);
                 if (((removeText).match(/</g) || []).length !==
                     ((removeText).match(/>/g) || []).length)
                 {
                     throw new Error();
                 }
 
-                if (((out.toInsert).match(/</g) || []).length !==
-                    ((out.toInsert).match(/>/g) || []).length)
+                if (((op.toInsert).match(/</g) || []).length !==
+                    ((op.toInsert).match(/>/g) || []).length)
                 {
                     throw new Error();
                 }
             }
 
-            return out;
+            return op;
         };
 
         return function (oldval, newval) {
             try {
-                return makeHTMLOperation(oldval, newval);
+                return makeOperation(oldval, newval);
             } catch (e) {
-                if (PARANOIA) { console.log(e); }
+                if (PARANOIA) { console.log(e.stack); }
                 return {
                     offset: 0,
                     toRemove: oldval.length,
@@ -338,6 +381,50 @@ define(function () {
 
     })();
 
+    var htmlOperationSimplify = function (op, origText, origOpSimplify)
+    {
+        // Try to be fast because this is called often.
+        var orig = origOpSimplify(op, origText, origOpSimplify);
+        if (!orig) { return null; }
+        if (!op.toInsert.match(/[<>]/) && !origText.substr(op.offset, op.toRemove).match(/[<>]/)) {
+            return orig;
+        }
+        if (orig.offset === op.offset
+            && orig.toRemove === op.toRemove
+            && orig.toInsert === op.toInsert)
+        {
+            return op;
+        }
+        // slooooooooow
+        var newText = patchString(origText, op.offset, op.toRemove, op.toInsert);
+        return makeHTMLOperation(origText, newText);
+    };
+
+
+
+    /**
+     * Attempt to locate a position in a newly altered parent node which represents
+     * the same location as the position in the old node.
+     * This is inherently huristic and might be unable to find the position, returning
+     * instead the beginning of the new parent node.
+     * This function works by taking the outerHTML of the interesting node and searching
+     * for matching HTML of a node within the new parent. If it is not found or if
+     * multiple nodes are discovered which look the same, it will try the next sibling
+     * of this node, walking forward one node at a time to the end of the document searching
+     * for a unique node which is seen in both the new and old parent elements.
+     * If searching forward ends without success, it will search backward and if that too
+     * ends without a successful discovery of a matching node, it will fail and return the
+     * parent node with offset zero which in practice will cause the cursor to relocate to
+     * the beginning of the highest node which was altered by the operation, hopefully rare.
+     *
+     * @param newParent the new parent element
+     * @param oldParent the old (replaced) parent element
+     * @param oldNode the node (a decendent of oldParent) which represents the position
+     * @param oldOffset the number of characters offset from the beginning of oldNode which
+     *                  represents the position.
+     * @return an object containing "node" (the new node) and "pos" the offset within the new
+     *         node.
+     */
     var getRelocatedPosition = (function () {
         var recurse = function (newParent, oldParent, oldNode, oldOffset, backward)
         {
@@ -370,6 +457,7 @@ define(function () {
                     }
                 }
                 // fail
+                debug("Failed to relocate position");
                 return;
             }
 
@@ -378,8 +466,9 @@ define(function () {
 
         return function (newParent, oldParent, oldNode, oldOffset)
         {
-            return (recurse(newParent, oldParent, oldNode, oldOffset, 0)
-                || { node: newParent, pos: oldOffset });
+            var out = recurse(newParent, oldParent, oldNode, oldOffset, 0);
+            if (!out || !out.node) { out = { node: newParent, pos: oldOffset }; }
+            return out;
         };
     })();
 
@@ -398,9 +487,12 @@ define(function () {
         if (!range.startContainer) {
             throw new Error();
         }
+        if (!newParent) { throw new Error(); }
 
         var newStart =
             getRelocatedPosition(newParent, oldParent, range.startContainer, range.startOffset);
+
+        if (!newStart.node) { throw new Error(); }
 
         newStart.pos = checkOffset(newStart.node, newStart.pos);
         var newEnd = { node: newStart.node, pos: newStart.pos };
@@ -444,8 +536,6 @@ define(function () {
 
     var applyHTMLOp = function (docText, op, dom, rangy, ifrWindow)
     {
-        if (PARANOIA && docText !== dom.innerHTML) { throw new Error(); }
-
         var parent = getNodeAtOffset(docText, op.offset, dom).node;
         var htmlToRemove = docText.substring(op.offset, op.offset + op.toRemove);
 
@@ -485,10 +575,8 @@ define(function () {
             throw new Error();
         }
 
-        var newParentInnerHTML = (
-            parentInnerHTML.substring(0, localOffset)
-          + op.toInsert
-          + parentInnerHTML.substring(localOffset + op.toRemove));
+        var newParentInnerHTML =
+            patchString(parentInnerHTML, localOffset, op.toRemove, op.toInsert);
 
         // Create a temp container for holding the children of the parent node.
         // Once we've identified the new range, we'll return the nodes to the
@@ -498,45 +586,45 @@ define(function () {
         babysitter.innerHTML = newParentInnerHTML;
 
         var range = getSelectedRange(rangy, ifrWindow);
-        if (range && range.containsNode(parent, true)) {
 
-            var pseudoRange = getRelocatedPseudoRange(babysitter, parent, range, rangy);
-            range.detach();
+        // doesn't intersect at all
+        if (!range || !range.containsNode(parent, true)) {
             replaceAllChildren(parent, babysitter);
-            var selection = rangy.getSelection(ifrWindow);
-            var newRange = rangy.createRange();
-            newRange.setStart(pseudoRange.start.node, pseudoRange.start.pos);
-            newRange.setEnd(pseudoRange.end.node, pseudoRange.end.pos);
-            selection.setSingleRange(newRange);
-        } else {
-            replaceAllChildren(parent, babysitter);
+            return;
         }
+
+        var pseudoRange = getRelocatedPseudoRange(babysitter, parent, range, rangy);
+        range.detach();
+        replaceAllChildren(parent, babysitter);
+        var selection = rangy.getSelection(ifrWindow);
+        var newRange = rangy.createRange();
+        newRange.setStart(pseudoRange.start.node, pseudoRange.start.pos);
+        newRange.setEnd(pseudoRange.end.node, pseudoRange.end.pos);
+        selection.setSingleRange(newRange);
+        return;
     };
 
-    /* Return whether the selection range has been "dirtied" and needs to be reloaded. */
     var applyTextOp = function (docText, op, dom, rangy, ifrWindow)
     {
-        if (PARANOIA && docText !== dom.innerHTML) { throw new Error(); }
-
         var nap = getNodeAtOffset(docText, op.offset, dom);
         var textNode = nap.node;
         var offset = nap.pos;
         if (textNode.nodeName !== '#text') {
-            throw new Error();
+            // It's possible that even though the operation looks like a text op,
+            // there is just no text node in the location where the op is to occur.
+            // In this case we'll call applyHTMLOp() and be done.
+            debug('textOp not possible, doing html op');
+            applyHTMLOp(docText, op, dom, rangy, ifrWindow);
+            return;
         }
 
         if (PARANOIA) {
             var napB = getNodeAtOffset(docText, op.offset + op.toRemove, dom);
-            if (napB.node !== nap.node) {
-                throw new Error();
-            }
+            if (napB.node !== nap.node) { throw new Error(); }
         }
 
         var oldHTML = getOuterHTML(textNode);
-        var newHTML = (
-            oldHTML.substring(0,offset)
-          + op.toInsert
-          + oldHTML.substring(offset + op.toRemove));
+        var newHTML = patchString(oldHTML, op.offset - offset, op.toRemove, op.toInsert);
 
         var range = getSelectedRange(rangy, ifrWindow);
         if (!range || (range.startContainer !== textNode && range.endContainer !== textNode)) {
@@ -545,8 +633,15 @@ define(function () {
             return;
         }
 
+        // Capture these values because they might be changed during the insert.
+        var rangeStartOffset = range.startOffset;
+        var rangeEndOffset = range.endOffset;
+        var rangeStartContainer = range.startContainer;
+        var rangeEndContainer = range.endContainer;
+
         var oldText = textNode.textContent;
         textNode.data = (newHTML === '') ? '' : nodeFromHTML(newHTML).data;
+debug("textNode.data = " + textNode.data);
         var newText = textNode.textContent;
 
         // do this again because the text might have escaped html crap
@@ -564,8 +659,8 @@ define(function () {
         };
 
         var rangeB = rangy.createRange();
-        rangeB.setStart(range.startContainer, getNewOffset(range.startContainer, range.startOffset));
-        rangeB.setEnd(range.endContainer, getNewOffset(range.endContainer, range.endOffset));
+        rangeB.setStart(rangeStartContainer, getNewOffset(rangeStartContainer, rangeStartOffset));
+        rangeB.setEnd(rangeEndContainer, getNewOffset(rangeEndContainer, rangeEndOffset));
 
         var selection = rangy.getSelection(ifrWindow);
         selection.setSingleRange(rangeB);
@@ -581,13 +676,25 @@ define(function () {
         if (op.offset + op.toRemove > docText.length) {
             throw new Error();
         }
-        if (docText.substring(op.offset, op.offset + op.toRemove).indexOf('<') > -1
-            || op.toInsert.indexOf('<') > -1 || true) // XXX:
-        {
-            return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
-        } else {
-            return applyTextOp(docText, op, dom, rangy, ifrWindow);
-        }
+        //try {
+            if (op.toInsert.indexOf('<') > -1
+                || docText.substring(op.offset, op.offset + op.toRemove).indexOf('<') > -1 || true) // XXX
+            {
+                debug('change contains brackets, htmlOp');
+                return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
+            } else {
+                //try {
+                    return applyTextOp(docText, op, dom, rangy, ifrWindow);
+                /*} catch (err) {
+                    if (PARANOIA) { console.log(err.stack); }
+                    return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
+                }*/
+            }
+        /*} catch (err) {
+            if (PARANOIA) { console.log(err.stack); }
+            // The big hammer
+            dom.innerHTML = patchString(docText, op.offset, op.toRemove, op.toInsert);
+        }*/
     };
 
 
@@ -638,10 +745,7 @@ define(function () {
             oldDocElem.innerHTML = oldDocText;
 
             var conf = {
-                atomicSectionMarkers: {
-                    begin: '<',
-                    end: '>'
-                }
+                //operationSimplify: htmlOperationSimplify
             };
             realtime = ChainPad.create(userName, passwd, channel, oldDocText, conf);
             var onEvent = function () {
