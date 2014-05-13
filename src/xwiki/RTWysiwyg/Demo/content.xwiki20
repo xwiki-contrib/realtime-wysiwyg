@@ -1,0 +1,33 @@
+{{velocity output="none"}}
+#set($lazy = false)
+#wysiwyg_import($lazy)
+$xcontext.
+{{/velocity}}
+
+{{html clean=false}}
+<style>
+.xRichTextEditor {
+    margin-left: auto;
+    margin-right: auto;
+    height:300px;
+}
+</style>
+<textarea id="realtime_wysiwyg_demo" class="hidden" cols="0" rows="0">Realtime Wysiwyg Editor</textarea>
+<script type="text/javascript">
+
+// to please the realtime plugin
+window.XWiki.contextaction = 'edit';
+
+document.observe('xwiki:dom:loaded', function () {
+    Wysiwyg.onModuleLoad(function() {
+console.log("editorloaded");
+        new WysiwygEditor({hookId:'realtime_wysiwyg_demo'});
+    });
+});
+
+document.observe('xwiki:wysiwyg:created', function(event) {
+    document.fire('xwiki:wysiwyg:showWysiwyg');
+});
+
+</script>
+{{/html}}
