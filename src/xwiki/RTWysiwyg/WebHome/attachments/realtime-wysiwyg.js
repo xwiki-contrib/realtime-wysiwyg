@@ -676,25 +676,25 @@ debug("textNode.data = " + textNode.data);
         if (op.offset + op.toRemove > docText.length) {
             throw new Error();
         }
-        //try {
+        try {
             if (op.toInsert.indexOf('<') > -1
                 || docText.substring(op.offset, op.offset + op.toRemove).indexOf('<') > -1 || true) // XXX
             {
                 debug('change contains brackets, htmlOp');
                 return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
             } else {
-                //try {
+                try {
                     return applyTextOp(docText, op, dom, rangy, ifrWindow);
-                /*} catch (err) {
+                } catch (err) {
                     if (PARANOIA) { console.log(err.stack); }
                     return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
-                }*/
+                }
             }
-        /*} catch (err) {
+        } catch (err) {
             if (PARANOIA) { console.log(err.stack); }
             // The big hammer
             dom.innerHTML = patchString(docText, op.offset, op.toRemove, op.toInsert);
-        }*/
+        }
     };
 
 
