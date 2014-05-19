@@ -737,7 +737,7 @@ debug("textNode.data = " + textNode.data);
         var meIdx = userList.indexOf(myUserName);
         if (meIdx === -1) {
             console.log("user list ["+userList+"] does not contain self ["+myUserName+"]...");
-            listElement.setAttribute('value', "Disconnected");
+            listElement.textContent = "Disconnected";
             return;
         }
         var userMap = { "Myself":1 };
@@ -764,7 +764,7 @@ debug("textNode.data = " + textNode.data);
         if (userListOut.length > 1) {
             userListOut[userListOut.length-1] = 'and ' + userListOut[userListOut.length-1];
         }
-        listElement.setAttribute('value', 'Editing with: ' + userListOut.join(', '));
+        listElement.textContent = 'Editing with: ' + userListOut.join(', ');
     };
 
     var start = module.exports.start = function (ChainPad, userName, channel, rangy, sockUrl) {
@@ -854,6 +854,24 @@ debug("textNode.data = " + textNode.data);
                 realtime.onUserListChange(function (userList) {
                     updateUserList(userName, realtimeUserList, userList);
                 });
+            }
+
+            var realtimeLag = document.getElementById('realtime-lag');
+            if (realtimeLag) {
+                setInterval(function () {
+                    var lag = realtime.getLag();
+                    var lagSec = Math.floor(lag.lag/10)/100;
+                    if (lagSec < 1) {
+                        realtimeLag.textContent = "";
+                    } else {
+                        realtimeLag.textContent = "Lag: ";
+                        if (lag.waiting) {
+                            realtimeLag.textContent += "?? " + Math.floor(lagSec);
+                        } else {
+                            realtimeLag.textContent += lagSec;
+                        }
+                    }
+                }, 3000);
             }
 
             socket.onerror = function (err) {

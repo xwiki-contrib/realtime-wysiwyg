@@ -430,6 +430,8 @@ var REGISTER     = Message.REGISTER     = 0;
 var REGISTER_ACK = Message.REGISTER_ACK = 1;
 var PATCH        = Message.PATCH        = 2;
 var DISCONNECT   = Message.DISCONNECT   = 3;
+var PING         = Message.PING         = 4;
+var PONG         = Message.PONG         = 5;
 
 var check = Message.check = function(msg) {
     Common.assert(msg.type === 'Message');
@@ -440,6 +442,9 @@ var check = Message.check = function(msg) {
     if (msg.messageType === PATCH) {
         Patch.check(msg.content);
         Common.assert(typeof(msg.lastMsgHash) === 'string');
+    } else if (msg.messageType === PING || msg.messageType === PONG) {
+        Common.assert(typeof(msg.lastMsgHash) === 'undefined');
+        Common.assert(typeof(msg.content) === 'number');
     } else if (msg.messageType === REGISTER
         || msg.messageType === REGISTER_ACK
         || msg.messageType === DISCONNECT)
@@ -471,6 +476,8 @@ var toString = Message.toString = function (msg) {
     var content = '';
     if (msg.messageType === REGISTER) {
         content = JSON.stringify([REGISTER]);
+    } else if (msg.messageType === PING || msg.messageType === PONG) {
+        content = JSON.stringify([msg.messageType, msg.content]);
     } else if (msg.messageType === PATCH) {
         content = JSON.stringify([PATCH, Patch.toObj(msg.content), msg.lastMsgHash]);
     }
@@ -503,6 +510,8 @@ var fromString = Message.fromString = function (str) {
     var message;
     if (content[0] === PATCH) {
         message = create(userName, '', channelId, PATCH, Patch.fromObj(content[1]), content[2]);
+    } else if (content[0] === PING || content[0] === PONG) {
+        message = create(userName, '', channelId, content[0], content[1]);
     } else {
         message = create(userName, '', channelId, content[0]);
     }
@@ -655,6 +664,30 @@ var getMessages = function (realtime) {
     });
 };
 
+var sendPing = function (realtime) {
+    realtime.pingSchedule = undefined;
+    realtime.lastPingTime = (new Date()).getTime();
+    var msg = Message.create(realtime.userName,
+                             realtime.authToken,
+                             realtime.channelId,
+                             Message.PING,
+                             realtime.lastPingTime);
+    realtime.onMessage(Message.toString(msg), function (err) {
+        if (err) { throw err; }
+    });
+};
+
+var onPong = function (realtime, msg) {
+    if (Common.PARANOIA) {
+        Common.assert(realtime.lastPingTime === Number(msg.content));
+    }
+    realtime.lastPingLag = (new Date()).getTime() - Number(msg.content);
+console.log(realtime.lastPingLag);
+    realtime.lastPingTime = 0;
+    realtime.pingSchedule =
+        schedule(realtime, function () { sendPing(realtime); }, realtime.pingCycle);
+};
+
 var create = ChainPad.create = function (userName, authToken, channelId, initialState, config) {
 
     var realtime = {
@@ -708,7 +741,16 @@ var create = ChainPad.create = function (userName, authToken, channelId, initial
         initialMessage: null,
 
         userListChangeHandlers: [],
-        userList: []
+        userList: [],
+
+        /** The schedule() for sending pings. */
+        pingSchedule: undefined,
+
+        lastPingLag: 0,
+        lastPingTime: 0,
+
+        /** Average number of milliseconds between pings. */
+        pingCycle: 5000
     };
 
     if (Common.PARANOIA) {
@@ -876,12 +918,18 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
     if (msg.messageType === Message.REGISTER_ACK) {
         debug(realtime, "registered");
         realtime.registered = true;
+        sendPing(realtime);
         return;
     }
 
     if (msg.messageType === Message.REGISTER) {
         realtime.userList.push(msg.userName);
         userListChange(realtime);
+        return;
+    }
+
+    if (msg.messageType === Message.PONG) {
+        onPong(realtime, msg);
         return;
     }
 
@@ -1102,7 +1150,13 @@ module.exports.create = function (userName, authToken, channelId, initialState, 
         onUserListChange: enterChainPad(realtime, function (handler) {
             Common.assert(typeof(handler) === 'function');
             realtime.userListChangeHandlers.push(handler);
-        })
+        }),
+        getLag: function () {
+            if (realtime.lastPingTime) {
+                return { waiting:1, lag: (new Date()).getTime() - realtime.lastPingTime };
+            }
+            return { waiting:0, lag: realtime.lastPingLag };
+        }
     };
 };
 },

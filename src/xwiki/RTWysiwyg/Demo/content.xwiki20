@@ -16,28 +16,56 @@
     margin-left: auto;
     margin-right: auto;
 }
+.rtWysiwygBar {
+    width: 100%;
+    padding: 0 10px;
+    color: #666;
+    font-weight: bold;
+    background-color: #eaeaea;
+    border: 0 none;
+    border-top: 1px solid #DDD;
+    border-right: 1px solid #DDD;
+    height: 24px;
+    float:left;
+}
+.rtWysiwygBar div {
+    height: 1.5em;
+    border: 2px solid #E8E8E8;
+    background: #eee;
+    line-height: 20px;
+    padding-left: 3px
+}
+.rtWysiwygUserList {
+    float: left;
+}
+.rtWysiwygLag {
+    float: right;
+    padding-right: 15px;
+}
 </style>
-<input type="text"
-       style="width:100%"
-       id="realtime-user-list"
-       value="Loading... (Or maybe broken and you should come back later)"
-/>
+
+<div class="rtWysiwygBar">
+    <div class="rtWysiwygUserList" id="realtime-user-list">
+        Loading... (Or maybe broken and you should come back later)
+    </div>
+    <div class="rtWysiwygLag" id="realtime-lag"></div>
+</div>
+
 <textarea id="realtime_wysiwyg_demo" style="height:385px; width:100%;" cols="0" rows="0">
 Realtime Wysiwyg!
 </textarea>
+
 <script type="text/javascript">
+    // to please the realtime plugin
+    window.XWiki.contextaction = 'edit';
 
-// to please the realtime plugin
-window.XWiki.contextaction = 'edit';
+    // Make it work with non-registered users.
+    wysiwygEditorConfig.inputURL = wysiwygEditorConfig.inputURL.replace(/\/edit\//, '/view/');
 
-// Make it work with non-registered users.
-wysiwygEditorConfig.inputURL = wysiwygEditorConfig.inputURL.replace(/\/edit\//, '/view/');
-
-document.observe('xwiki:dom:loaded', function () {
-    Wysiwyg.onModuleLoad(function() {
-        new WysiwygEditor(wysiwygEditorConfig);
+    document.observe('xwiki:dom:loaded', function () {
+        Wysiwyg.onModuleLoad(function() {
+            new WysiwygEditor(wysiwygEditorConfig);
+        });
     });
-});
-
 </script>
 {{/html}}

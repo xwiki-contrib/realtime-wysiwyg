@@ -23,6 +23,8 @@ Or generate a Maven compatible build using:
 
     ./do --mvn
 
+Issues: http://jira.xwiki.org/browse/RTWYSIWYG
+
 
 [chainpad]: https://github.com/xwiki-contrib/chainpad
 [wysiwyg]: http://extensions.xwiki.org/xwiki/bin/view/Extension/WYSIWYG+Editor+Module
