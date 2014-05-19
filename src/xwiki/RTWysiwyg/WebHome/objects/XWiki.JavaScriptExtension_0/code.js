@@ -4,7 +4,7 @@
 
     // VELOCITY
     var WEBSOCKET_URL = "$services.websocket.getURL('realtime')";
-    var USER = "$services.model.resolveDocument($xcontext.getUser())";
+    var USER = "$!xcontext.getUserReference()" || "xwiki:XWiki.XWikiGuest";
     var ALLOW_REALTIME = "Allow Realtime Collaboration"; // TODO(cjd): translate
     var JOIN_REALTIME = "Join Realtime Collaborative Session";
     var PATHS = {

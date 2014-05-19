@@ -6,7 +6,9 @@ install use the [XWiki Realtime Backend][rtbackend] from the Extension Manager a
 as follows:
 
     # first make sure you have an up-to-date version of xwiki-tools
-    npm install -g xwiki-tools
+    git clone git://github.com/xwiki-contrib/node-xwikimodel.git
+    cd node-xwikimodel
+    npm install -g
 
     # then run the builder
     ./do
