@@ -732,6 +732,39 @@ debug("textNode.data = " + textNode.data);
                    unbind);
     };
 
+    var updateUserList = function (myUserName, listElement, userList)
+    {
+        var meIdx = userList.indexOf(myUserName);
+        if (meIdx === -1) {
+            console.log("user list ["+userList+"] does not contain self ["+myUserName+"]...");
+            listElement.setAttribute('value', "Disconnected");
+            return;
+        }
+        var userMap = { "Myself":1 };
+        userList.splice(meIdx, 1);
+        for (var i = 0; i < userList.length; i++) {
+            var user = userList[i].replace(/-.*/, '');
+            if (user === 'xwiki:XWiki.XWikiGuest') { user = 'Guest'; }
+            userMap[user] = userMap[user] || 0;
+            if (user === 'Guest' && userMap[user] > 0) {
+                userMap['Guests'] = userMap[user];
+                delete userMap[user];
+                user = 'Guests';
+            }
+            userMap[user]++;
+        }
+        var userListOut = [];
+        for (var name in userMap) {
+            if (userMap[name] > 1) {
+                userListOut.push(userMap[name] + " " + name);
+            } else {
+                userListOut.push(name);
+            }
+        }
+        userListOut[userListOut.length-1] = 'and ' + userListOut[userListOut.length-1];
+        listElement.setAttribute('value', 'Editing with: ' + userListOut.join(', '));
+    };
+
     var start = module.exports.start = function (ChainPad, userName, channel, rangy, sockUrl) {
         var passwd = 'y';
         var wysiwygDiv = document.getElementsByClassName('xRichTextEditor')[0];
@@ -813,6 +846,13 @@ debug("textNode.data = " + textNode.data);
             });
 
             realtime.onPatch(incomingPatch);
+
+            var realtimeUserList = document.getElementById('realtime-user-list');
+            if (realtimeUserList) {
+                realtime.onUserListChange(function (userList) {
+                    updateUserList(userName, realtimeUserList, userList);
+                });
+            }
 
             bindAllEvents(wysiwygDiv, doc.body, onEvent, false);
 
