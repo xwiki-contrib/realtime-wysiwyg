@@ -1,7 +1,13 @@
 {{velocity output="none"}}
-#set($lazy = false)
-#wysiwyg_import($lazy)
-$xcontext.
+#wysiwyg_import(false)
+#set($params = {})
+#wysiwyg_storeConfig($params, $xwiki.getDocument("RTWysiwyg.DemoContent"), "realtime_wysiwyg_demo", false)
+{{/velocity}}
+
+{{velocity}}
+{{html clean=false}}
+#wysiwyg_writeConfig('wysiwygEditorConfig', $params)
+{{/html}}
 {{/velocity}}
 
 {{html clean=false}}
@@ -11,21 +17,26 @@ $xcontext.
     margin-right: auto;
 }
 </style>
-<input type="text" style="width:100%" id="realtime-user-list" />
-<textarea id="realtime_wysiwyg_demo" style="height:385px; width:100%;" cols="0" rows="0">Realtime Wysiwyg Editor</textarea>
+<input type="text"
+       style="width:100%"
+       id="realtime-user-list"
+       value="Loading... (Or maybe broken and you should come back later)"
+/>
+<textarea id="realtime_wysiwyg_demo" style="height:385px; width:100%;" cols="0" rows="0">
+Realtime Wysiwyg!
+</textarea>
 <script type="text/javascript">
 
 // to please the realtime plugin
 window.XWiki.contextaction = 'edit';
 
+// Make it work with non-registered users.
+wysiwygEditorConfig.inputURL = wysiwygEditorConfig.inputURL.replace(/\/edit\//, '/view/');
+
 document.observe('xwiki:dom:loaded', function () {
     Wysiwyg.onModuleLoad(function() {
-        new WysiwygEditor({hookId:'realtime_wysiwyg_demo'});
+        new WysiwygEditor(wysiwygEditorConfig);
     });
-});
-
-document.observe('xwiki:wysiwyg:created', function(event) {
-    document.fire('xwiki:wysiwyg:showWysiwyg');
 });
 
 </script>

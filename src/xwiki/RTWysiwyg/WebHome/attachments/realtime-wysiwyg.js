@@ -761,7 +761,9 @@ debug("textNode.data = " + textNode.data);
                 userListOut.push(name);
             }
         }
-        userListOut[userListOut.length-1] = 'and ' + userListOut[userListOut.length-1];
+        if (userListOut.length > 1) {
+            userListOut[userListOut.length-1] = 'and ' + userListOut[userListOut.length-1];
+        }
         listElement.setAttribute('value', 'Editing with: ' + userListOut.join(', '));
     };
 
@@ -853,6 +855,11 @@ debug("textNode.data = " + textNode.data);
                     updateUserList(userName, realtimeUserList, userList);
                 });
             }
+
+            socket.onerror = function (err) {
+                console.log("There was a websocket error");
+                console.log(err);
+            };
 
             bindAllEvents(wysiwygDiv, doc.body, onEvent, false);
 
