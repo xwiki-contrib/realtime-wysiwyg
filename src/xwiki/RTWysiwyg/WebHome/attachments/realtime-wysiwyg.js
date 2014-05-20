@@ -104,16 +104,12 @@ define([
 
     var checkLag = function (realtime, lagElement) {
         var lag = realtime.getLag();
-        var lagSec = Math.floor(lag.lag/10)/100;
-        if (lagSec < 1) {
-            lagElement.textContent = "";
+        var lagSec = lag.lag/1000;
+        lagElement.textContent = "Lag: ";
+        if (lag.waiting && larSec > 1) {
+            lagElement.textContent += "?? " + Math.floor(lagSec);
         } else {
-            lagElement.textContent = "Lag: ";
-            if (lag.waiting) {
-                lagElement.textContent += "?? " + Math.floor(lagSec);
-            } else {
-                lagElement.textContent += lagSec;
-            }
+            lagElement.textContent += lagSec;
         }
     };
 
