@@ -1,7 +1,7 @@
 {{velocity output="none"}}
 #wysiwyg_import(false)
 #set($params = {})
-#wysiwyg_storeConfig($params, $xwiki.getDocument("RTWysiwyg.DemoContent"), "realtime_wysiwyg_demo", false)
+#wysiwyg_storeConfig($params, $doc, "realtime_wysiwyg_demo", false)
 {{/velocity}}
 
 {{velocity}}
@@ -21,26 +21,20 @@
     padding: 0 10px;
     color: #666;
     font-weight: bold;
-    background-color: #eaeaea;
-    border: 0 none;
-    border-top: 1px solid #DDD;
-    border-right: 1px solid #DDD;
+    background-color: #f0f0ee;
+    border: 1px solid #DDD;
+    border-top: 2px solid #DDD;
     height: 24px;
     float:left;
 }
 .rtWysiwygBar div {
     height: 1.5em;
-    border: 2px solid #E8E8E8;
-    background: #eee;
-    line-height: 20px;
-    padding-left: 3px
+    background: #f0f0ee;
+    line-height: 25px;
 }
-.rtWysiwygUserList {
-    float: left;
-}
-.rtWysiwygLag {
+#realtime-lag {
     float: right;
-    padding-right: 15px;
+    margin-right: 15px;
 }
 </style>
 
