@@ -162,6 +162,7 @@ define([
 
         var allMessages = [];
         var isErrorState = false;
+        var initializing = true;
         var recoverableErrorCount = 0;
         var error = function (recoverable, err) {
             if (recoverable && recoverableErrorCount++ < MAX_RECOVERABLE_ERRORS) { return; }
@@ -222,8 +223,13 @@ define([
                 }
             };
 
-            var incomingPatch = function (patch) {
+            var incomingPatch = function () {
                 if (isErrorState) { return; }
+
+                // When we first connect, we have to "sync the chain"
+                // this is an optimization to not fully handle all patches until we're synced.
+                if (initializing) { return; }
+
                 var docText = doc.body.innerHTML;
                 //if (oldDocText !== doc.body.innerHTML) { throw new Error(); }
                 var rtDoc = realtime.getUserDoc();
@@ -255,6 +261,13 @@ define([
             if (realtimeUserList) {
                 realtime.onUserListChange(function (userList) {
                     if (isErrorState) { return; }
+                    if (userList.indexOf(userName) > -1 && initializing) {
+                        // Second half of a piece of cleverness which relies on the fact that
+                        // nobody is going to care much about the state of the document until
+                        // they have downloaded all patches.
+                        initializing = false;
+                        incomingPatch();
+                    }
                     updateUserList(userName, realtimeUserList, userList);
                 });
             }
