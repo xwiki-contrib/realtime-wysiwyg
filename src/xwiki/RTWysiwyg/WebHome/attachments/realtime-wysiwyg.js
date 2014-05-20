@@ -106,7 +106,7 @@ define([
         var lag = realtime.getLag();
         var lagSec = lag.lag/1000;
         lagElement.textContent = "Lag: ";
-        if (lag.waiting && larSec > 1) {
+        if (lag.waiting && lagSec > 1) {
             lagElement.textContent += "?? " + Math.floor(lagSec);
         } else {
             lagElement.textContent += lagSec;
@@ -187,16 +187,12 @@ define([
         }
 
         socket.onopen = function(evt) {
-            var oldDocText = doc.body.innerHTML;
-            var oldDocElem = document.createElement('div');
-            oldDocElem.innerHTML = oldDocText;
-
-            var conf = {
-                //operationSimplify: htmlOperationSimplify
-            };
-            realtime = ChainPad.create(userName, passwd, channel, oldDocText, conf);
+            realtime = ChainPad.create(userName, passwd, channel, doc.body.innerHTML, {});
             var onEvent = function () {
                 if (isErrorState) { return; }
+                if (initializing) { return; }
+
+                var oldDocText = realtime.getUserDoc();
 
                 var docText = doc.body.innerHTML;
                 if (oldDocText === docText) { return; }
@@ -206,13 +202,12 @@ define([
                 var op = attempt(HTMLPatcher.makeHTMLOperation)(oldDocText, docText);
 
                 if (op.toRemove > 0) {
-                    realtime.remove(op.offset, op.toRemove);
+                    attempt(realtime.remove)(op.offset, op.toRemove);
                 }
                 if (op.toInsert.length > 0) {
-                    realtime.insert(op.offset, op.toInsert);
+                    attempt(realtime.insert)(op.offset, op.toInsert);
                 }
 
-                oldDocText = docText;
                 if (realtime.getUserDoc() !== docText) {
                     error(true, 'realtime.getUserDoc() !== docText');
                     throw new Error('realtime.getUserDoc() !== docText');
@@ -227,12 +222,10 @@ define([
                 if (initializing) { return; }
 
                 var docText = doc.body.innerHTML;
-                //if (oldDocText !== doc.body.innerHTML) { throw new Error(); }
                 var rtDoc = realtime.getUserDoc();
                 if (docText === rtDoc) { return; }
                 var op = attempt(HTMLPatcher.makeHTMLOperation)(docText, rtDoc);
                 attempt(HTMLPatcher.applyOp)(docText, op, doc.body, rangy, ifr.contentWindow);
-                oldDocText = doc.body.innerHTML;
             };
 
             socket.onmessage = function (evt) {
