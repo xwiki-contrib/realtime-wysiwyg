@@ -682,7 +682,6 @@ var onPong = function (realtime, msg) {
         Common.assert(realtime.lastPingTime === Number(msg.content));
     }
     realtime.lastPingLag = (new Date()).getTime() - Number(msg.content);
-console.log(realtime.lastPingLag);
     realtime.lastPingTime = 0;
     realtime.pingSchedule =
         schedule(realtime, function () { sendPing(realtime); }, realtime.pingCycle);

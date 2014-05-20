@@ -10,7 +10,9 @@
     var PATHS = {
       RTWysiwyg_WebHome_chainpad: "$doc.getAttachmentURL('chainpad.js')",
       RTWysiwyg_WebHome_realtime_wysiwyg: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
-      RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy.js')"
+      RTWysiwyg_WebHome_html_patcher: "$doc.getAttachmentURL('html-patcher.js')",
+      RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy.js')",
+      RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
     };
     // END_VELOCITY
 
@@ -20,11 +22,7 @@
     // remove to debug
     //var console = { log:function() {} };
 
-    var deps = [
-        'RTWysiwyg_WebHome_realtime_wysiwyg',
-        'RTWysiwyg_WebHome_rangy',
-        'RTWysiwyg_WebHome_chainpad',
-    ];
+    var deps = [ 'RTWysiwyg_WebHome_realtime_wysiwyg' ];
     // start them loading...
     require(deps, function () {});
 
@@ -32,10 +30,9 @@
         require(deps, function (RTWysiwyg) {
             var userName = USER + '-' + String(Math.random()).substring(2);
             var channel = JSON.stringify(XWiki.currentDocument);
-            window.rangy.init();
             // GWT is catching all of the errors.
             window.onerror = null;
-            RTWysiwyg.start(window.ChainPad, userName, channel, window.rangy, WEBSOCKET_URL);
+            RTWysiwyg.start(userName, channel, WEBSOCKET_URL);
         });
     });
 }());

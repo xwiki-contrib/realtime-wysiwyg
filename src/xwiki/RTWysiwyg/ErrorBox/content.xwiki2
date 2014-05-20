@@ -1,0 +1,35 @@
+{{info}}
+This page contains code for notifying the user when an error occurs in the Realtime Wysiwyg Editor.
+{{/info}}
+
+(% class="hidden" %)(((
+
+(% class="realtime-wysiwyg-error" %)(((
+
+= Oops, something went wrong! =
+
+The Realtime Wysiwyg Editor has encountered a non-recoverable error and must stop.
+Your work is below and you may save it and re-integrate it into the Realtime session.
+
+{{html clean=false}}<textarea class="wysiwygContent" cols="60" rows="10"></textarea>{{/html}}
+
+Please consider reporting a bug at http://jira.xwiki.org/browse/RTWYSIWYG and include the
+following content (Privacy note: This contains the history of the document you were working on).
+
+{{html clean=false}}<textarea class="internalData" cols="60" rows="10"></textarea>{{/html}}
+
+)))
+
+(% class="realtime-wysiwyg-disconnected" %)(((
+
+= Disconnected =
+
+Your connection to the Realtime WYSIWYG Editor has been lost, you may try refreshing the page
+to get the connection back. Any data since your last save may not be available on reload but
+below is a copy of what you were working on in HTML format.
+
+{{html clean=false}}<textarea class="wysiwygContent" cols="60" rows="10"></textarea>{{/html}}
+
+)))
+
+)))
