@@ -18,23 +18,29 @@
 }
 .rtWysiwygBar {
     width: 100%;
-    padding: 0 10px;
     color: #666;
     font-weight: bold;
     background-color: #f0f0ee;
-    border: 1px solid #DDD;
-    border-top: 2px solid #DDD;
+    border: 0, none;
+    border-top: 1px solid #DDD;
+    border-bottom: 2px solid #DDD;
     height: 24px;
     float:left;
 }
 .rtWysiwygBar div {
+    padding: 0 10px;
     height: 1.5em;
     background: #f0f0ee;
     line-height: 25px;
+    height:24px;
+}
+#realtime-user-list {
+    border-left: 2px solid #DDD;
+    float: left;
 }
 #realtime-lag {
+    border-right: 2px solid #DDD;
     float: right;
-    margin-right: 15px;
 }
 </style>
 
