@@ -5,10 +5,8 @@ define(function () {
     var PAGE_CONTENT = "$escapetool.javascript($doc.getRenderedContent())";
     // END VELOCITY
 
-    var pageElem = document.createElement('div');
-    pageElem.innerHTML = PAGE_CONTENT;
-    var errorElem = pageElem.getElementsByClassName('realtime-wysiwyg-error')[0];
-    var disconnectedElem = pageElem.getElementsByClassName('realtime-wysiwyg-disconnected')[0];
+    /** different types of popups, see RTWysiwyg.ErrorBox content */
+    var ELEMS = [ 'error', 'disconnected', 'debug' ];
 
     var ModalPopup = Class.create(XWiki.widgets.ModalPopup, {
         /** Default parameters can be added to the custom class. */
@@ -43,18 +41,27 @@ define(function () {
         }
     });
 
+
+    var pageElem = document.createElement('div');
+    pageElem.innerHTML = PAGE_CONTENT;
+    var elems = {};
+    for (var i = 0; i < ELEMS.length; i++) {
+        elems[ELEMS[i]] = pageElem.getElementsByClassName('realtime-wysiwyg-' + ELEMS[i])[0];
+    }
+
     var show = module.exports.show = function (type, wysiwygContent, internalData) {
+
         new ModalPopup({ then: function (elem) {
-            if (type === 'error') {
-                elem.appendChild(errorElem);
-                elem.getElementsByClassName('wysiwygContent')[0].value = wysiwygContent;
-                elem.getElementsByClassName('internalData')[0].value = internalData;
-            } else if (type === 'disconnected') {
-                elem.appendChild(disconnectedElem);
-                elem.getElementsByClassName('wysiwygContent')[0].value = wysiwygContent;
-            } else {
-                console.log("error of unknown type");
+            for (var name in elems) {
+                if (type !== name) { continue; }
+                elem.appendChild(elems[name]);
+                var con = elem.getElementsByClassName('wysiwygContent')[0];
+                if (con) { con.value = wysiwygContent; }
+                var data = elem.getElementsByClassName('internalData')[0];
+                if (data) { data.value = internalData; }
+                return;
             }
+            elem.textContent = "error of unknown type ["+type+"]";
         }});
     };
 

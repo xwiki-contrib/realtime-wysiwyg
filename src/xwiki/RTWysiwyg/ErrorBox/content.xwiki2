@@ -32,4 +32,14 @@ below is a copy of what you were working on in HTML format.
 
 )))
 
+(% class="realtime-wysiwyg-debug" %)(((
+
+= Debug Log =
+
+The following is a full history of this realtime session:
+
+{{html clean=false}}<textarea class="internalData" cols="60" rows="10"></textarea>{{/html}}
+
+)))
+
 )))

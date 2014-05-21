@@ -38,8 +38,20 @@
     border-left: 2px solid #DDD;
     float: left;
 }
-#realtime-lag {
+#realtime-debug {
+    float: left;
+}
+#realtime-debug > a {
+    display: none;
+}
+#realtime-debug:hover > a {
+    display:inline;
+}
+#realtime-rightside {
     border-right: 2px solid #DDD;
+    float:right;
+}
+#realtime-lag {
     float: right;
 }
 </style>
@@ -48,7 +60,12 @@
     <div class="rtWysiwygUserList" id="realtime-user-list">
         Loading... (Or maybe broken and you should come back later)
     </div>
-    <div class="rtWysiwygLag" id="realtime-lag"></div>
+    <div id="realtime-rightside">
+      <div id="realtime-debug">
+          <a id="realtime-debug-link" href="#">Debug</a>
+      </div>
+      <div id="realtime-lag"></div>
+    </div>
 </div>
 
 <textarea id="realtime_wysiwyg_demo" style="height:385px; width:100%;" cols="0" rows="0">

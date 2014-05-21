@@ -32,7 +32,17 @@ define([
      */
     var MAX_RECOVERABLE_ERRORS = 15;
 
+    /** Maximum number of milliseconds of lag before we fail the connection. */
     var MAX_LAG_BEFORE_DISCONNECT = 20000;
+
+    /** Id of the element for getting debug info. */
+    var DEBUG_LINK_ID = 'realtime-debug-link';
+
+    /** Id of the div containing the user list. */
+    var USER_LIST_ID = 'realtime-user-list';
+
+    /** Id of the div containing the lag info. */
+    var LAG_ELEM_ID = 'realtime-lag';
 
     // ------------------ Trapping Keyboard Events ---------------------- //
 
@@ -79,7 +89,13 @@ define([
         userList.splice(meIdx, 1);
         for (var i = 0; i < userList.length; i++) {
             var user = userList[i].replace(/-.*/, '');
-            if (user === 'xwiki:XWiki.XWikiGuest') { user = 'Guest'; }
+            if (user === 'xwiki:XWiki.XWikiGuest') {
+                if (userMap['Guests']) {
+                    user = 'Guests';
+                } else {
+                    user = 'Guest';
+                }
+            }
             userMap[user] = userMap[user] || 0;
             if (user === 'Guest' && userMap[user] > 0) {
                 userMap['Guests'] = userMap[user];
@@ -119,17 +135,33 @@ define([
             || (realtime.getLag().waiting && realtime.getLag().lag > MAX_LAG_BEFORE_DISCONNECT);
     };
 
-    var handleError = function (socket, realtime, err, docHTML, allMessages) {
-        var internalError = JSON.stringify({
-            cause: err,
+    var abort = function (socket, realtimeUserList, realtime) {
+        realtime.abort();
+        try { socket.close(); } catch (e) { }
+        var userList = document.getElementById(USER_LIST_ID);
+        if (userList) { userList.textContent = "Disconnected"; }
+        var lag = document.getElementById(LAG_ELEM_ID);
+        if (lag) { lag.textContent = ''; }
+    };
+
+    var createDebugInfo = function (cause, realtime, docHTML, allMessages) {
+        return JSON.stringify({
+            cause: cause,
             realtimeUserDoc: realtime.getUserDoc(),
             realtimeAuthDoc: realtime.getAuthDoc(),
             docHTML: docHTML,
             allMessages: allMessages,
-        })
-        realtime.abort();
-        try { socket.close(); } catch (e) { }
+        });
+    };
+
+    var handleError = function (socket, realtime, err, docHTML, allMessages) {
+        var internalError = createDebugInfo(cause, realtime, docHTML, allMessages);
+        abort(socket, realtime);
         ErrorBox.show('error', docHTML, internalError);
+    };
+
+    var getDocHTML = function (doc) {
+        return doc.body.innerHTML;
     };
 
     // chrome sometimes generates invalid html but it corrects it the next time around.
@@ -144,9 +176,19 @@ define([
                                 doc.body,
                                 Rangy,
                                 contentWindow);
-            docText = doc.body.innerHTML;
+            docText = getDocHTML(doc);
             if (newDocText !== docText) { throw new Error(); }
         }
+    };
+
+    var attachDebugClickHandler = function (realtime, iframeDoc, allMessages) {
+        var link = document.getElementById(DEBUG_LINK_ID);
+        if (!link) { return; }
+        link.onclick = function () {
+            var debugInfo =
+                createDebugInfo('debug button', realtime, getDocHTML(iframeDoc), allMessages);
+            ErrorBox.show('debug', '', debugInfo);
+        };
     };
 
     var start = module.exports.start = function (userName, channel, sockUrl) {
@@ -163,7 +205,7 @@ define([
         var error = function (recoverable, err) {
             if (recoverable && recoverableErrorCount++ < MAX_RECOVERABLE_ERRORS) { return; }
             isErrorState = true;
-            handleError(socket, realtime, err, doc.body.innerHTML, allMessages);
+            handleError(socket, realtime, err, getDocHTML(doc), allMessages);
         };
         var attempt = function (func) {
             return function () {
@@ -178,23 +220,25 @@ define([
         var checkSocket = function () {
             if (isSocketDisconnected(socket, realtime)) {
                 isErrorState = true;
-                realtime.abort();
-                try { socket.close(); } catch (e) { }
-                ErrorBox.show('disconnected', doc.body.innerHTML);
+                abort(socket, realtime);
+                ErrorBox.show('disconnected', getDocHTML(doc));
                 return true;
             }
             return false;
-        }
+        };
 
         socket.onopen = function(evt) {
-            realtime = ChainPad.create(userName, passwd, channel, doc.body.innerHTML, {});
+            realtime = ChainPad.create(userName, passwd, channel, getDocHTML(doc), {});
+
+            attachDebugClickHandler(realtime, doc, allMessages);
+
             var onEvent = function () {
                 if (isErrorState) { return; }
                 if (initializing) { return; }
 
                 var oldDocText = realtime.getUserDoc();
 
-                var docText = doc.body.innerHTML;
+                var docText = getDocHTML(doc);
                 if (oldDocText === docText) { return; }
 
                 attempt(fixChrome)(docText, doc, ifr.contentWindow);
@@ -221,7 +265,7 @@ define([
                 // this is an optimization to not fully handle all patches until we're synced.
                 if (initializing) { return; }
 
-                var docText = doc.body.innerHTML;
+                var docText = getDocHTML(doc);
                 var rtDoc = realtime.getUserDoc();
                 if (docText === rtDoc) { return; }
                 var op = attempt(HTMLPatcher.makeHTMLOperation)(docText, rtDoc);
@@ -246,7 +290,7 @@ define([
 
             realtime.onPatch(incomingPatch);
 
-            var realtimeUserList = document.getElementById('realtime-user-list');
+            var realtimeUserList = document.getElementById(USER_LIST_ID);
             if (realtimeUserList) {
                 realtime.onUserListChange(function (userList) {
                     if (isErrorState) { return; }
@@ -261,7 +305,7 @@ define([
                 });
             }
 
-            var realtimeLag = document.getElementById('realtime-lag');
+            var realtimeLag = document.getElementById(LAG_ELEM_ID);
             if (realtimeLag) {
                 setInterval(function () {
                     if (isErrorState) { return; }
