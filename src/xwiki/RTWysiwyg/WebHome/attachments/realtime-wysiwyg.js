@@ -135,7 +135,7 @@ define([
             || (realtime.getLag().waiting && realtime.getLag().lag > MAX_LAG_BEFORE_DISCONNECT);
     };
 
-    var abort = function (socket, realtimeUserList, realtime) {
+    var abort = function (socket, realtime) {
         realtime.abort();
         try { socket.close(); } catch (e) { }
         var userList = document.getElementById(USER_LIST_ID);
