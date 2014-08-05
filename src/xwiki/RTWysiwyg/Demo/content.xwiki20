@@ -1,13 +1,16 @@
 {{velocity output="none"}}
 $xwiki.jsx.use("RTWysiwyg.WebHome", {"demoMode":true})
-#wysiwyg_import(false)
-#set($params = {})
-#wysiwyg_storeConfig($params, $doc, "realtime_wysiwyg_demo", false)
+
+#if("$!rtwysiwyg_demo_params" == "")
+  #wysiwyg_import(false)
+  #set($rtwysiwyg_demo_params = {})
+  #wysiwyg_storeConfig($rtwysiwyg_demo_params, $doc, "realtime_wysiwyg_demo", false)
+#end
 {{/velocity}}
 
 {{velocity}}
 {{html clean=false}}
-#wysiwyg_writeConfig('wysiwygEditorConfig', $params)
+#wysiwyg_writeConfig('wysiwygEditorConfig', $rtwysiwyg_demo_params)
 {{/html}}
 {{/velocity}}
 
@@ -69,6 +72,13 @@ $xwiki.jsx.use("RTWysiwyg.WebHome", {"demoMode":true})
 
     // Make it work with non-registered users.
     wysiwygEditorConfig.inputURL = wysiwygEditorConfig.inputURL.replace(/\/edit\//, '/view/');
+
+    // Nevermind import option, it would never work anyway.
+    var menu = JSON.parse(wysiwygEditorConfig.menu);
+    menu.forEach(function (x, name) {
+        if (x.feature === 'import') { delete menu[name]; }
+    });
+    wysiwygEditorConfig.menu = JSON.stringify(menu);
 
     document.observe('xwiki:dom:loaded', function () {
         Wysiwyg.onModuleLoad(function() {
