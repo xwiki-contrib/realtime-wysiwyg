@@ -22,36 +22,13 @@ define(function () {
     var debug = function (x) { };
     debug = function (x) { console.log(x); };
 
-    var drillDown = function (node)
-    {
-        while (node.childNodes[0]) { node = node.childNodes[0]; }
-        return node;
-    };
-
-    var getNextSiblingDeep = function (node)
+    var getNextSiblingDeep = function (node, parent)
     {
         if (node.firstChild) { return node.firstChild; }
-        if (node.nextSibling) { return node.nextSibling; }
-        if (node.parentNode) { return node.parentNode.nextSibling; }
-    };
-
-    var getPreviousSiblingDeep = function (node)
-    {
-        if (node.previousSibling) {
-            node = node.previousSibling;
-            while (node.lastChild) { node = node.lastChild; }
-            return node;
-        }
-        return node.parentNode;
-    };
-
-    var decendsFrom = function (maybeChild, maybeParent)
-    {
-        for (;;) {
-            if (!maybeChild) { return false; }
-            if (maybeChild === maybeParent) { return true; }
-            maybeChild = maybeChild.parentNode;
-        }
+        do {
+            if (node.nextSibling) { return node.nextSibling; }
+            node = node.parentNode;
+        } while (node && node !== parent);
     };
 
     var getOuterHTML = function (node)
@@ -197,7 +174,6 @@ define(function () {
         return { node: dom, pos: offset };
     };
 
-
     var makeTextOperation = module.exports.makeTextOperation = function(oldval, newval)
     {
         if (oldval === newval) { return; }
@@ -218,6 +194,164 @@ define(function () {
             toRemove: oldval.length - begin - end,
             toInsert: newval.slice(begin, newval.length - end),
         };
+    };
+
+    var getChildPath = function (parent) {
+        var out = [];
+        for (var next = parent; next; next = getNextSiblingDeep(next, parent)) {
+            out.push(next.nodeName);
+        }
+        return out;
+    };
+
+    var getNodePath = function (parent, node) {
+        var before = [];
+        var next = parent;
+        for (; next && next !== node; next = getNextSiblingDeep(next, parent)) {
+            before.push(next.nodeName);
+        }
+        if (next !== node) { throw new Error(); }
+
+        var after = [];
+        for (; next; next = getNextSiblingDeep(next, parent)) {
+            after.push(next.nodeName);
+        }
+
+        return [ before, after ];
+    };
+
+    var relocatedPositionInNode = function (newNode, oldNode, offset)
+    {
+        if (newNode.nodeName !== '#text' || oldNode.nodeName !== '#text' || offset === 0) {
+            offset = 0;
+        } else if (offset >= newNode.length) {
+            offset = newNode.length - 1;
+        } else if (oldNode.data.substring(0, offset) === newNode.data.substring(0, offset)) {
+            // keep same offset and fall through
+        } else {
+            var rOffset = oldNode.length - offset;
+            if (oldNode.data.substring(offset) ===
+                newNode.data.substring(newNode.length - rOffset))
+            {
+                offset = newNode.length - rOffset;
+            } else {
+                offset = 0;
+            }
+        }
+        return { node: newNode, pos: offset };
+    };
+
+    var getRelocatedPosition = function (newParent, oldParent, oldNode, oldOffset)
+    {
+        if (oldNode === oldParent) {
+            return relocatedPositionInNode(newParent, oldNode, oldOffset);
+        }
+        var newPath = getChildPath(newParent);
+
+        if (newPath.length === 1) {
+            return { node: null, pos: 0 };
+        }
+
+        var oldPaths = getNodePath(oldParent, oldNode);
+
+        // The outside tags are <div> and <head> or something so we skip the first.
+        newPath.shift();
+        oldPaths[0].shift();
+        var out = getNextSiblingDeep(newParent);
+
+        var newPathJoined = newPath.join('|');
+        if (newPathJoined.indexOf(oldPaths[0].join('|')) === 0) {
+            for (var i = 1; i < oldPaths[0].length; i++) {
+                out = getNextSiblingDeep(out);
+            }
+            return relocatedPositionInNode(out, oldNode, oldOffset);
+        }
+        var oldPathOneJoined = oldPaths[1].join('|');
+        if (newPathJoined.indexOf(oldPathOneJoined) ===
+            (newPathJoined.length - oldPathOneJoined.length))
+        {
+            for (var i = 0; i < newPath.length - oldPaths[1].length; i++) {
+                out = getNextSiblingDeep(out);
+            }
+            return relocatedPositionInNode(out, oldNode, oldOffset);
+        }
+
+console.log("Could not locate node in [" + newPathJoined + "] [" + oldPaths[0].join("|") + "] [" + oldPathOneJoined + "]");
+console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.length - oldPathOneJoined.length));
+
+        return { node: newParent, pos: 0 };
+    };
+
+    // We can't create a real range until the new parent is installed in the document
+    // but we need the old range to be in the document so we can do comparisons
+    // so create a "pseudo" range instead.
+    var getRelocatedPseudoRange = function (newParent, oldParent, range)
+    {
+        if (!range.startContainer) {
+            throw new Error();
+        }
+        if (!newParent) { throw new Error(); }
+
+        // Copy because tinkering in the dom messes up the original range.
+        var startContainer = range.startContainer;
+        var startOffset = range.startOffset;
+        var endContainer = range.endContainer;
+        var endOffset = range.endOffset;
+
+        var newStart = getRelocatedPosition(newParent, oldParent, startContainer, startOffset);
+
+        if (!newStart.node) {
+            // there is probably nothing left of the document so just clear the selection.
+            endContainer = null;
+        }
+
+        var newEnd = { node: newStart.node, pos: newStart.pos };
+        if (endContainer) {
+            if (endContainer !== startContainer) {
+                newEnd = getRelocatedPosition(newParent, oldParent, endContainer, endOffset);
+            } else if (endOffset !== startOffset) {
+                newEnd = {
+                    node: newStart.node,
+                    pos: relocatedPositionInNode(newStart.node, endContainer, endOffset).pos
+                };
+            } else {
+                newEnd = { node: newStart.node, pos: newStart.pos };
+            }
+        }
+
+        return { start: newStart, end: newEnd };
+    };
+
+    var replaceAllChildren = function (parent, newParent)
+    {
+        var c;
+        while ((c = parent.firstChild)) {
+            parent.removeChild(c);
+        }
+        while ((c = newParent.firstChild)) {
+            newParent.removeChild(c);
+            parent.appendChild(c);
+        }
+    };
+
+    var getSelectedRange = function (rangy, ifrWindow, selection) {
+        selection = selection || rangy.getSelection(ifrWindow);
+        if (selection.rangeCount === 0) {
+            return;
+        }
+        var range = selection.getRangeAt(0);
+        range.backward = (selection.rangeCount === 1 && selection.isBackward());
+        if (!range.startContainer) {
+            throw new Error();
+        }
+
+        // Occasionally, some browsers *cough* firefox *cough* will attach the range to something
+        // which has been used in the past but is nolonger part of the dom...
+        if (!range.startContainer || !ifrWindow.document.getElementById(range.startContainer)) {
+            return;
+        }
+
+        return range;
     };
 
     var makeHTMLOperation = module.exports.makeHTMLOperation = (function () {
@@ -382,159 +516,6 @@ define(function () {
 
     })();
 
-    var htmlOperationSimplify = function (op, origText, origOpSimplify)
-    {
-        // Try to be fast because this is called often.
-        var orig = origOpSimplify(op, origText, origOpSimplify);
-        if (!orig) { return null; }
-        if (!op.toInsert.match(/[<>]/) && !origText.substr(op.offset, op.toRemove).match(/[<>]/)) {
-            return orig;
-        }
-        if (orig.offset === op.offset
-            && orig.toRemove === op.toRemove
-            && orig.toInsert === op.toInsert)
-        {
-            return op;
-        }
-        // slooooooooow
-        var newText = patchString(origText, op.offset, op.toRemove, op.toInsert);
-        return makeHTMLOperation(origText, newText);
-    };
-
-
-
-    /**
-     * Attempt to locate a position in a newly altered parent node which represents
-     * the same location as the position in the old node.
-     * This is inherently huristic and might be unable to find the position, returning
-     * instead the beginning of the new parent node.
-     * This function works by taking the outerHTML of the interesting node and searching
-     * for matching HTML of a node within the new parent. If it is not found or if
-     * multiple nodes are discovered which look the same, it will try the next sibling
-     * of this node, walking forward one node at a time to the end of the document searching
-     * for a unique node which is seen in both the new and old parent elements.
-     * If searching forward ends without success, it will search backward and if that too
-     * ends without a successful discovery of a matching node, it will fail and return the
-     * parent node with offset zero which in practice will cause the cursor to relocate to
-     * the beginning of the highest node which was altered by the operation, hopefully rare.
-     *
-     * @param newParent the new parent element
-     * @param oldParent the old (replaced) parent element
-     * @param oldNode the node (a decendent of oldParent) which represents the position
-     * @param oldOffset the number of characters offset from the beginning of oldNode which
-     *                  represents the position.
-     * @return an object containing "node" (the new node) and "pos" the offset within the new
-     *         node.
-     */
-    var getRelocatedPosition = (function () {
-        var recurse = function (newParent, oldParent, oldNode, oldOffset, backward)
-        {
-            var nodeHTML = getOuterHTML(oldNode);
-            var newNodes = [];
-            for (var nextNode = newParent; nextNode = getNextSiblingDeep(nextNode);) {
-                if (getOuterHTML(nextNode) === nodeHTML) { newNodes.push(nextNode); }
-            }
-            if (newNodes.length !== 1) {
-                // search forward looking for a matching node
-                var nextSiblingDeep = getNextSiblingDeep(oldNode);
-                if (nextSiblingDeep && decendsFrom(nextSiblingDeep, oldParent)) {
-                    if (!backward) {
-                        var relocated = recurse(newParent, oldParent, nextSiblingDeep, 0, 0);
-                        if (relocated) {
-                            relocated.node = getPreviousSiblingDeep(relocated.node);
-                            relocated.pos = oldOffset;
-                        }
-                        return relocated;
-                    }
-                    // try a reverse search
-                    var previousSiblingDeep = getPreviousSiblingDeep(oldNode);
-                    if (previousSiblingDeep && decendsFrom(previousSiblingDeep, oldParent)) {
-                        var relocated = recurse(newParent, oldParent, previousSiblingDeep, 0, 1);
-                        if (relocated) {
-                            relocated.node = getNextSiblingDeep(relocated.node);
-                            relocated.pos = oldOffset;
-                        }
-                        return relocated;
-                    }
-                }
-                // fail
-                debug("Failed to relocate position");
-                return;
-            }
-
-            return { node: newNodes[0], pos: oldOffset };
-        };
-
-        return function (newParent, oldParent, oldNode, oldOffset)
-        {
-            var out = recurse(newParent, oldParent, oldNode, oldOffset, 0);
-            if (!out || !out.node) { out = { node: newParent, pos: oldOffset }; }
-            return out;
-        };
-    })();
-
-    var checkOffset = function (node, offset)
-    {
-        if (offset === 0) { return offset; }
-        if (node.nodeName[0] === '#' && offset < node.length) { return offset; }
-        return 0;
-    };
-
-    // We can't create a real range until the new parent is installed in the document
-    // but we need the old range ot be in the document so we can do comparisons
-    // so create a "pseudo" range instead.
-    var getRelocatedPseudoRange = function (newParent, oldParent, range)
-    {
-        if (!range.startContainer) {
-            throw new Error();
-        }
-        if (!newParent) { throw new Error(); }
-
-        var newStart =
-            getRelocatedPosition(newParent, oldParent, range.startContainer, range.startOffset);
-
-        if (!newStart.node) { throw new Error(); }
-
-        newStart.pos = checkOffset(newStart.node, newStart.pos);
-        var newEnd = { node: newStart.node, pos: newStart.pos };
-        if (range.endContainer) {
-            if (range.endContainer === range.startContainer) {
-                newEnd = newStart;
-            } else {
-                newEnd =
-                    getRelocatedPosition(newParent, oldParent, range.endContainer, range.endOffset);
-                newEnd.pos = checkOffset(newEnd.node, newEnd.pos);
-            }
-        }
-
-        return { start: newStart, end: newEnd };
-    };
-
-    var replaceAllChildren = function (parent, newParent)
-    {
-        var c;
-        while ((c = parent.firstChild)) {
-            parent.removeChild(c);
-        }
-        while ((c = newParent.firstChild)) {
-            newParent.removeChild(c);
-            parent.appendChild(c);
-        }
-    };
-
-    var getSelectedRange = function (rangy, ifrWindow, selection) {
-        selection = selection || rangy.getSelection(ifrWindow);
-        if (selection.rangeCount === 0) {
-            return;
-        }
-        var range = selection.getRangeAt(0);
-        range.backward = (selection.rangeCount === 1 && selection.isBackward());
-        if (!range.startContainer) {
-            throw new Error();
-        }
-        return range;
-    };
-
     var applyHTMLOp = function (docText, op, dom, rangy, ifrWindow)
     {
         var parent = getNodeAtOffset(docText, op.offset, dom).node;
@@ -572,7 +553,9 @@ define(function () {
             if (!parent) { throw new Error(); }
         }
 
-        if (docText.substr(indexOfInnerHTML, parentInnerHTML.length) !== parentInnerHTML) {
+        if (PARANOIA &&
+            docText.substr(indexOfInnerHTML, parentInnerHTML.length) !== parentInnerHTML)
+        {
             throw new Error();
         }
 
@@ -584,6 +567,9 @@ define(function () {
         // original parent. This is because parent might be the <body> and we
         // don't want to destroy all of our event listeners.
         var babysitter = ifrWindow.document.createElement('div');
+        // give it a uid so that we can prove later that it's not in the document,
+        // see getSelectedRange()
+        babysitter.setAttribute('id', uniqueId());
         babysitter.innerHTML = newParentInnerHTML;
 
         var range = getSelectedRange(rangy, ifrWindow);
@@ -597,75 +583,13 @@ define(function () {
         var pseudoRange = getRelocatedPseudoRange(babysitter, parent, range, rangy);
         range.detach();
         replaceAllChildren(parent, babysitter);
-        var selection = rangy.getSelection(ifrWindow);
-        var newRange = rangy.createRange();
-        newRange.setStart(pseudoRange.start.node, pseudoRange.start.pos);
-        newRange.setEnd(pseudoRange.end.node, pseudoRange.end.pos);
-        selection.setSingleRange(newRange);
-        return;
-    };
-
-    var applyTextOp = function (docText, op, dom, rangy, ifrWindow)
-    {
-        var nap = getNodeAtOffset(docText, op.offset, dom);
-        var textNode = nap.node;
-        var offset = nap.pos;
-        if (textNode.nodeName !== '#text') {
-            // It's possible that even though the operation looks like a text op,
-            // there is just no text node in the location where the op is to occur.
-            // In this case we'll call applyHTMLOp() and be done.
-            debug('textOp not possible, doing html op');
-            applyHTMLOp(docText, op, dom, rangy, ifrWindow);
-            return;
+        if (pseudoRange.start.node) {
+            var selection = rangy.getSelection(ifrWindow);
+            var newRange = rangy.createRange();
+            newRange.setStart(pseudoRange.start.node, pseudoRange.start.pos);
+            newRange.setEnd(pseudoRange.end.node, pseudoRange.end.pos);
+            selection.setSingleRange(newRange);
         }
-
-        if (PARANOIA) {
-            var napB = getNodeAtOffset(docText, op.offset + op.toRemove, dom);
-            if (napB.node !== nap.node) { throw new Error(); }
-        }
-
-        var oldHTML = getOuterHTML(textNode);
-        var newHTML = patchString(oldHTML, op.offset - offset, op.toRemove, op.toInsert);
-
-        var range = getSelectedRange(rangy, ifrWindow);
-        if (!range || (range.startContainer !== textNode && range.endContainer !== textNode)) {
-            // fast path
-            textNode.data = (newHTML === '') ? '' : nodeFromHTML(newHTML).data;
-            return;
-        }
-
-        // Capture these values because they might be changed during the insert.
-        var rangeStartOffset = range.startOffset;
-        var rangeEndOffset = range.endOffset;
-        var rangeStartContainer = range.startContainer;
-        var rangeEndContainer = range.endContainer;
-
-        var oldText = textNode.textContent;
-        textNode.data = (newHTML === '') ? '' : nodeFromHTML(newHTML).data;
-debug("textNode.data = " + textNode.data);
-        var newText = textNode.textContent;
-
-        // do this again because the text might have escaped html crap
-        // in it which we'd need to account for.
-        var textOp = makeTextOperation(oldText, newText);
-        var getNewOffset = function (cont, os) {
-            if (cont !== textNode) { return os; }
-            if (os > textOp.offset) {
-                if (os <= textOp.offset + textOp.toRemove) {
-                    return textOp.offset;
-                }
-                return os + textOp.toInsert.length - textOp.toRemove;
-            }
-            return os;
-        };
-
-        var rangeB = rangy.createRange();
-        rangeB.setStart(rangeStartContainer, getNewOffset(rangeStartContainer, rangeStartOffset));
-        rangeB.setEnd(rangeEndContainer, getNewOffset(rangeEndContainer, rangeEndOffset));
-
-        var selection = rangy.getSelection(ifrWindow);
-        selection.setSingleRange(rangeB);
-
         return;
     };
 
@@ -677,25 +601,16 @@ debug("textNode.data = " + textNode.data);
         if (op.offset + op.toRemove > docText.length) {
             throw new Error();
         }
-        try {
-            if (op.toInsert.indexOf('<') > -1
-                || docText.substring(op.offset, op.offset + op.toRemove).indexOf('<') > -1 || true) // XXX
-            {
-                debug('change contains brackets, htmlOp');
-                return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
-            } else {
-                try {
-                    return applyTextOp(docText, op, dom, rangy, ifrWindow);
-                } catch (err) {
-                    if (PARANOIA) { console.log(err.stack); }
-                    return applyHTMLOp(docText, op, dom, rangy, ifrWindow);
-                }
-            }
-        } catch (err) {
+        //try {TODO(cjd):
+            applyHTMLOp(docText, op, dom, rangy, ifrWindow);
+            var result = patchString(docText, op.offset, op.toRemove, op.toInsert);
+            var innerHTML = getInnerHTML(dom);
+            if (result !== innerHTML) { throw new Error(); }
+        /*} catch (err) {
             if (PARANOIA) { console.log(err.stack); }
             // The big hammer
             dom.innerHTML = patchString(docText, op.offset, op.toRemove, op.toInsert);
-        }
+        }*/
     };
 
     return module.exports;

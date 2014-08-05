@@ -15,15 +15,18 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 define([
+    'jquery',
     'RTWysiwyg_WebHome_html_patcher',
     'RTWysiwyg_ErrorBox',
     'RTWysiwyg_WebHome_rangy',
-    'RTWysiwyg_WebHome_chainpad'
-], function (HTMLPatcher, ErrorBox) {
+    'RTWysiwyg_WebHome_chainpad',
+    'RTWysiwyg_WebHome_otaml'
+], function ($, HTMLPatcher, ErrorBox) {
 
     var Rangy = window.rangy;
     Rangy.init();
     var ChainPad = window.ChainPad;
+    var Otaml = window.Otaml;
 
     var module = { exports: {} };
 
@@ -37,13 +40,13 @@ define([
     var MAX_LAG_BEFORE_DISCONNECT = 20000;
 
     /** Id of the element for getting debug info. */
-    var DEBUG_LINK_ID = 'realtime-debug-link';
+    var DEBUG_LINK_ID = 'rtwysiwyg-debug-link';
 
     /** Id of the div containing the user list. */
-    var USER_LIST_ID = 'realtime-user-list';
+    var USER_LIST_CLS = 'rtwysiwyg-user-list';
 
     /** Id of the div containing the lag info. */
-    var LAG_ELEM_ID = 'realtime-lag';
+    var LAG_ELEM_CLS = 'rtwysiwyg-lag';
 
     // ------------------ Trapping Keyboard Events ---------------------- //
 
@@ -131,18 +134,71 @@ define([
     };
 
     var isSocketDisconnected = function (socket, realtime) {
-        return socket.readyState === socket.CLOSING
-            || socket.readyState === socket.CLOSED
+        return socket._socket.readyState === socket.CLOSING
+            || socket._socket.readyState === socket.CLOSED
             || (realtime.getLag().waiting && realtime.getLag().lag > MAX_LAG_BEFORE_DISCONNECT);
+    };
+
+    var updateUserList = function (myUserName, listElement, userList, messages) {
+        var meIdx = userList.indexOf(myUserName);
+        if (meIdx === -1) {
+            listElement.text(messages.disconnected);
+            return;
+        }
+        var userMap = {};
+        userMap[messages.myself] = 1;
+        userList.splice(meIdx, 1);
+        for (var i = 0; i < userList.length; i++) {
+            var user;
+            if (userList[i].indexOf('xwiki:XWiki.XWikiGuest') === 0) {
+                if (userMap.Guests) {
+                    user = messages.guests;
+                } else {
+                    user = messages.guest;
+                }
+            } else {
+                user = userList[i].replace(/^.*-([^-]*)%2d[0-9]*$/, function(all, one) {
+                    return decodeURIComponent(one);
+                });
+            }
+            userMap[user] = userMap[user] || 0;
+            if (user === messages.guest && userMap[user] > 0) {
+                userMap.Guests = userMap[user];
+                delete userMap[user];
+                user = messages.guests;
+            }
+            userMap[user]++;
+        }
+        var userListOut = [];
+        for (var name in userMap) {
+            if (userMap[name] > 1) {
+                userListOut.push(userMap[name] + " " + name);
+            } else {
+                userListOut.push(name);
+            }
+        }
+        if (userListOut.length > 1) {
+            userListOut[userListOut.length-1] =
+                messages.and + ' ' + userListOut[userListOut.length-1];
+        }
+        listElement.text(messages.editingWith + ' ' + userListOut.join(', '));
+    };
+
+    var createUserList = function (realtime, myUserName, container, messages) {
+        var id = uid();
+        $(container).prepend('<div class="' + USER_LIST_CLS + '" id="'+id+'"></div>');
+        var listElement = $('#'+id);
+        realtime.onUserListChange(function (userList) {
+            updateUserList(myUserName, listElement, userList, messages);
+        });
+        return listElement;
     };
 
     var abort = function (socket, realtime) {
         realtime.abort();
-        try { socket.close(); } catch (e) { }
-        var userList = document.getElementById(USER_LIST_ID);
-        if (userList) { userList.textContent = "Disconnected"; }
-        var lag = document.getElementById(LAG_ELEM_ID);
-        if (lag) { lag.textContent = ''; }
+        try { socket._socket.close(); } catch (e) { }
+        $('.'+USER_LIST_CLS).text("Disconnected");
+        $('.'+LAG_ELEM_CLS).text("");
     };
 
     var createDebugInfo = function (cause, realtime, docHTML, allMessages) {
@@ -167,37 +223,162 @@ define([
 
     // chrome sometimes generates invalid html but it corrects it the next time around.
     var fixChrome = function (docText, doc, contentWindow) {
-        var docElem = doc.createElement('div');
-        docElem.innerHTML = docText;
-        var newDocText = docElem.innerHTML;
-        var fixChromeOp = HTMLPatcher.makeHTMLOperation(docText, newDocText);
-        if (fixChromeOp) {
+        for (var i = 0; i < 10; i++) {
+            var docElem = doc.createElement('div');
+            docElem.innerHTML = docText;
+            var newDocText = docElem.innerHTML;
+            var fixChromeOp = HTMLPatcher.makeHTMLOperation(docText, newDocText);
+            if (!fixChromeOp) { return; }            
             HTMLPatcher.applyOp(docText,
                                 fixChromeOp,
                                 doc.body,
                                 Rangy,
                                 contentWindow);
             docText = getDocHTML(doc);
-            if (newDocText !== docText) { throw new Error(); }
+            if (newDocText === docText) { return; }
         }
+        throw new Error();
     };
 
-    var attachDebugClickHandler = function (realtime, iframeDoc, allMessages) {
-        var link = document.getElementById(DEBUG_LINK_ID);
-        if (!link) { return; }
-        link.onclick = function () {
+    var checkSectionEdit = function () {
+        var href = window.location.href;
+        if (href.indexOf('#') === -1) { href += '#!'; }
+        var si = href.indexOf('section=');
+        if (si === -1 || si > href.indexOf('#')) { return false; }
+        var m = href.match(/([&]*section=[0-9]+)/)[1];
+        href = href.replace(m, '');
+        if (m[0] === '&') { m = m.substring(1); }
+        href = href + '&' + m;
+        window.location.href = href;
+        return true;
+    };
+
+    var uid = function () {
+        return 'rtwysiwyg-uid-' + String(Math.random()).substring(2);
+    };
+
+    var createDebugLink = function (realtime, iframeDoc, allMessages, toolbar, messages) {
+        var id = uid();
+        toolbar.find('.rtwysiwyg-toolbar-rightside').append(
+            '<a href="#" id="' + id + '" class="rtwysiwyg-debug-link">' + messages.debug + '</a>'
+        );
+        $('#'+id).on('click', function () {
             var debugInfo =
                 createDebugInfo('debug button', realtime, getDocHTML(iframeDoc), allMessages);
             ErrorBox.show('debug', '', debugInfo);
-        };
+        });
     };
 
-    var start = module.exports.start = function (userName, channel, sockUrl) {
+    var checkLag = function (realtime, lagElement, messages) {
+        var lag = realtime.getLag();
+        var lagSec = lag.lag/1000;
+        var lagMsg = messages.lag + ' ';
+        if (lag.waiting && lagSec > 1) {
+            lagMsg += "?? " + Math.floor(lagSec);
+        } else {
+            lagMsg += lagSec;
+        }
+        lagElement.text(lagMsg);
+    };
+
+    var createLagElement = function (socket, realtime, container, messages) {
+        var id = uid();
+        $(container).append('<div class="' + LAG_ELEM_CLS + '" id="'+id+'"></div>');
+        var lagElement = $('#'+id);
+        var intr = setInterval(function () {
+            checkLag(realtime, lagElement, messages);
+        }, 3000);
+        socket.onClose.push(function () { clearTimeout(intr); });
+        return lagElement;
+    };
+
+    var createRealtimeToolbar = function (container) {
+        var id = uid();
+        $(container).prepend(
+            '<div class="rtwysiwyg-toolbar" id="' + id + '">' +
+                '<div class="rtwysiwyg-toolbar-leftside"></div>' +
+                '<div class="rtwysiwyg-toolbar-rightside"></div>' +
+            '</div>'
+        );
+        return $('#'+id);
+    };
+
+    var setStyle = function () {
+        $('head').append([
+            '<style>',
+            '.rtwysiwyg-toolbar {',
+            '    color: #666;',
+            '    font-weight: bold;',
+            '    background-color: #f0f0ee;',
+            '    border: 0, none;',
+            '    border-bottom: 1px solid #DDD;',
+            '    border-top: 3px solid #CCC;',
+            '    border-right: 2px solid #CCC;',
+            '    border-left: 2px solid #CCC;',
+            '    height: 24px;',
+            '}',
+            '.rtwysiwyg-toolbar div {',
+            '    padding: 0 10px;',
+            '    height: 1.5em;',
+            '    background: #f0f0ee;',
+            '    line-height: 25px;',
+            '    height: 24px;',
+            '}',
+            '.rtwysiwyg-toolbar-leftside {',
+            '    float: left;',
+            '}',
+            '.rtwysiwyg-toolbar-rightside {',
+            '    float: right;',
+            '}',
+            '.rtwysiwyg-lag {',
+            '    float: right;',
+            '}',
+            '.gwt-TabBar {',
+            '    display:none;',
+            '}',
+            '.rtwysiwyg-debug-link:link { color:transparent; }',
+            '.rtwysiwyg-debug-link:link:hover { color:blue; }',
+            '.gwt-TabPanelBottom { border-top: 0 none; }',
+            '</style>'
+         ].join(''));
+    };
+
+    var makeWebsocket = function (url) {
+        var socket = new WebSocket(url);
+        var out = {
+            onOpen: [],
+            onClose: [],
+            onError: [],
+            onMessage: [],
+            send: function (msg) { socket.send(msg); },
+            _socket: socket
+        };
+        var mkHandler = function (name) {
+            return function (evt) {
+                for (var i = 0; i < out[name].length; i++) {
+                    if (out[name][i](evt) === false) { return; }
+                }
+            };
+        };
+        socket.onopen = mkHandler('onOpen');
+        socket.onclose = mkHandler('onClose');
+        socket.onerror = mkHandler('onError');
+        socket.onmessage = mkHandler('onMessage');
+        return out;
+    };
+
+    var editor = function (websocketUrl, userName, messages, channel, demoMode, language) {
+
+        if (checkSectionEdit()) { return; }
+        setStyle();
+
         var passwd = 'y';
         var wysiwygDiv = document.getElementsByClassName('xRichTextEditor')[0];
         var ifr = wysiwygDiv.getElementsByClassName('gwt-RichTextArea')[0];
         var doc = ifr.contentWindow.document;
-        var socket = new WebSocket(sockUrl);
+        var socket = makeWebsocket(websocketUrl);
+
+        var toolbar = createRealtimeToolbar('#xwikieditcontent');
 
         var allMessages = [];
         var isErrorState = false;
@@ -210,12 +391,12 @@ define([
         };
         var attempt = function (func) {
             return function () {
-                try {
+                //try {TODO(cjd):
                     return func.apply(func, arguments);
-                } catch (e) {
+                /*} catch (e) {
                     error(true, e);
                     throw e;
-                }
+                }*/
             };
         };
         var checkSocket = function () {
@@ -228,10 +409,23 @@ define([
             return false;
         };
 
-        socket.onopen = function(evt) {
-            realtime = ChainPad.create(userName, passwd, channel, getDocHTML(doc), {});
+        socket.onOpen.push(function(evt) {
+            realtime = ChainPad.create(userName,
+                                       passwd,
+                                       channel,
+                                       getDocHTML(doc),
+                                       { transformFunction: Otaml.transform });
 
-            attachDebugClickHandler(realtime, doc, allMessages);
+            createDebugLink(realtime, doc, allMessages, toolbar, messages);
+            createLagElement(socket,
+                             realtime,
+                             toolbar.find('.rtwysiwyg-toolbar-rightside'),
+                             messages);
+
+            createUserList(realtime,
+                           userName,
+                           toolbar.find('.rtwysiwyg-toolbar-leftside'),
+                           messages);
 
             var onEvent = function () {
                 if (isErrorState) { return; }
@@ -244,7 +438,7 @@ define([
 
                 attempt(fixChrome)(docText, doc, ifr.contentWindow);
 
-                var op = attempt(HTMLPatcher.makeHTMLOperation)(oldDocText, docText);
+                var op = attempt(HTMLPatcher.makeTextOperation)(oldDocText, docText);
 
                 if (op.toRemove > 0) {
                     attempt(realtime.remove)(op.offset, op.toRemove);
@@ -268,18 +462,28 @@ define([
 
                 var docText = getDocHTML(doc);
                 var rtDoc = realtime.getUserDoc();
-                if (docText === rtDoc) { return; }
                 var op = attempt(HTMLPatcher.makeHTMLOperation)(docText, rtDoc);
+                if (!op) { return; }
                 attempt(HTMLPatcher.applyOp)(docText, op, doc.body, rangy, ifr.contentWindow);
             };
 
-            socket.onmessage = function (evt) {
+            realtime.onUserListChange(function (userList) {
+                if (userList.indexOf(userName) > -1 && initializing) {
+                    // Second half of a piece of cleverness which relies on the fact that
+                    // nobody is going to care much about the state of the document until
+                    // they have downloaded all patches.
+                    initializing = false;
+                    incomingPatch();
+                }
+            });
+
+            socket.onMessage.push(function (evt) {
                 if (isErrorState) { return; }
                 allMessages.push(evt.data);
                 // paranoia
                 onEvent();
                 realtime.message(evt.data);
-            };
+            });
             realtime.onMessage(function (message) {
                 if (isErrorState) { return; }
                 try {
@@ -291,34 +495,10 @@ define([
 
             realtime.onPatch(incomingPatch);
 
-            var realtimeUserList = document.getElementById(USER_LIST_ID);
-            if (realtimeUserList) {
-                realtime.onUserListChange(function (userList) {
-                    if (isErrorState) { return; }
-                    if (userList.indexOf(userName) > -1 && initializing) {
-                        // Second half of a piece of cleverness which relies on the fact that
-                        // nobody is going to care much about the state of the document until
-                        // they have downloaded all patches.
-                        initializing = false;
-                        incomingPatch();
-                    }
-                    updateUserList(userName, realtimeUserList, userList);
-                });
-            }
-
-            var realtimeLag = document.getElementById(LAG_ELEM_ID);
-            if (realtimeLag) {
-                setInterval(function () {
-                    if (isErrorState) { return; }
-                    checkSocket();
-                    checkLag(realtime, realtimeLag);
-                }, 3000);
-            }
-
-            socket.onerror = function (err) {
+            socket.onError.push(function (err) {
                 if (isErrorState) { return; }
                 if (!checkSocket()) { error(true, err); }
-            };
+            });
 
             bindAllEvents(wysiwygDiv, doc.body, onEvent, false);
 
@@ -337,7 +517,45 @@ define([
             realtime.start();
 
             console.log('started');
+        });
+    };
+
+    var main = module.exports.main =
+        function (websocketUrl, userName, messages, channel, demoMode, language)
+    {
+        if (!websocketUrl) {
+            throw new Error("No WebSocket URL, please ensure Realtime Backend is installed.");
+        }
+
+        // Either we are in edit mode or the document is locked.
+        // There is no cross-language way that the UI tells us the document is locked
+        // but we can hunt for the force button.
+        var forceLink = $('a[href$="&force=1"][href*="/edit/"]');
+
+        var hasActiveRealtimeSession = function () {
+            forceLink.text(messages.joinSession);
+            forceLink.attr('href', forceLink.attr('href') + '&editor=wysiwyg');
         };
+
+        if (forceLink.length && !localStorage.getItem(LOCALSTORAGE_DISALLOW)) {
+            // ok it's locked.
+            var socket = new WebSocket(websocketUrl);
+            socket.onopen = function (evt) {
+                socket.onmessage = function (evt) {
+                    debug("Message! " + evt.data);
+                    if (evt.data !== ('0:' + channel.length + ':' + channel + '5:[1,0]')) {
+                        debug("hasActiveRealtimeSession");
+                        socket.close();
+                        hasActiveRealtimeSession();
+                    }
+                };
+                socket.send('1:x' + userName.length + ':' + userName +
+                    channel.length + ':' + channel + '3:[0]');
+                debug("Bound websocket");
+            };
+        } else if (window.XWiki.editor === 'wysiwyg' || demoMode) {
+            editor(websocketUrl, userName, messages, channel, demoMode, language);
+        }
     };
 
     return module.exports;

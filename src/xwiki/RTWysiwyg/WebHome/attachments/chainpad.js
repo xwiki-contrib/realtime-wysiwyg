@@ -2,19 +2,20 @@
 var r=function(){var e="function"==typeof require&&require,r=function(i,o,u){o||(o=0);var n=r.resolve(i,o),t=r.m[o][n];if(!t&&e){if(t=e(n))return t}else if(t&&t.c&&(o=t.c,n=t.m,t=r.m[o][t.m],!t))throw new Error('failed to require "'+n+'" from '+o);if(!t)throw new Error('failed to require "'+i+'" from '+u);return t.exports||(t.exports={},t.call(t.exports,t,t.exports,r.relative(n,o))),t.exports};return r.resolve=function(e,n){var i=e,t=e+".js",o=e+"/index.js";return r.m[n][t]&&t?t:r.m[n][o]&&o?o:i},r.relative=function(e,t){return function(n){if("."!=n.charAt(0))return r(n,t,e);var o=e.split("/"),f=n.split("/");o.pop();for(var i=0;i<f.length;i++){var u=f[i];".."==u?o.pop():"."!=u&&o.push(u)}return r(o.join("/"),t,e)}},r}();r.m = [];
 r.m[0] = {
 "Patch.js": function(module, exports, require){
-/* vim: set expandtab ts=4 sw=4: */
 /*
- * You may redistribute this program and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 2.1 of the License, or (at your option) any
- * later version.
+ * Copyright 2014 XWiki SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 var Common = require('./Common');
@@ -210,7 +211,7 @@ var equals = Patch.equals = function (patchA, patchB) {
     return true;
 };
 
-var transform = Patch.transform = function (origToTransform, transformBy, doc) {
+var transform = Patch.transform = function (origToTransform, transformBy, doc, transformFunction) {
     if (Common.PARANOIA) {
         check(origToTransform, doc.length);
         check(transformBy, doc.length);
@@ -220,22 +221,20 @@ var transform = Patch.transform = function (origToTransform, transformBy, doc) {
     var resultOfTransformBy = apply(transformBy, doc);
 
     toTransform = clone(origToTransform);
+    var text = doc;
     for (var i = toTransform.operations.length-1; i >= 0; i--) {
+        text = Operation.apply(toTransform.operations[i], text);
         for (var j = transformBy.operations.length-1; j >= 0; j--) {
-            toTransform.operations[i] =
-                Operation.transform(toTransform.operations[i], transformBy.operations[j]);
+            toTransform.operations[i] = Operation.transform(text,
+                                                            toTransform.operations[i],
+                                                            transformBy.operations[j],
+                                                            transformFunction);
             if (!toTransform.operations[i]) {
                 break;
             }
         }
         if (Common.PARANOIA && toTransform.operations[i]) {
-try {
             Operation.check(toTransform.operations[i], resultOfTransformBy.length);
-} catch (e) {
-console.log('transform('+JSON.stringify([origToTransform,transformBy,doc], null, '  ')+');');
-console.log(JSON.stringify(toTransform.operations[i]));
-throw e;
-}
         }
     }
     var out = create(transformBy.parentHash);
@@ -251,7 +250,7 @@ throw e;
         check(out, resultOfTransformBy.length);
     }
     return out;
-}
+};
 
 var random = Patch.random = function (doc, opCount) {
     Common.assert(typeof(doc) === 'string');
@@ -266,6 +265,7 @@ var random = Patch.random = function (doc, opCount) {
     check(patch);
     return patch;
 };
+
 },
 "SHA256.js": function(module, exports, require){
 /* A JavaScript implementation of the Secure Hash Algorithm, SHA-256
@@ -349,41 +349,42 @@ var random = Patch.random = function (doc, opCount) {
     }
     module.exports.hex_sha256 = hex_sha256;
 }());
+
 },
 "Common.js": function(module, exports, require){
-/* vim: set expandtab ts=4 sw=4: */
 /*
- * You may redistribute this program and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 2.1 of the License, or (at your option) any
- * later version.
+ * Copyright 2014 XWiki SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-var Common = module.exports;
 
-Common.PARANOIA = false;
+var PARANOIA = module.exports.PARANOIA = false;
 
 /* throw errors over non-compliant messages which would otherwise be treated as invalid */
-Common.TESTING = true;
+var TESTING = module.exports.TESTING = true;
 
-var assert = Common.assert = function (expr) {
+var assert = module.exports.assert = function (expr) {
     if (!expr) { throw new Error("Failed assertion"); }
 };
 
-var isUint = Common.isUint = function (integer) {
+var isUint = module.exports.isUint = function (integer) {
     return (typeof(integer) === 'number') &&
         (Math.floor(integer) === integer) &&
         (integer >= 0);
 };
 
-var randomASCII = Common.randomASCII = function (length) {
+var randomASCII = module.exports.randomASCII = function (length) {
     var content = [];
     for (var i = 0; i < length; i++) {
         content[i] = String.fromCharCode( Math.floor(Math.random()*256) % 57 + 65 );
@@ -391,32 +392,28 @@ var randomASCII = Common.randomASCII = function (length) {
     return content.join('');
 };
 
-var compareHashes = Common.compareHashes = function (hashA, hashB) {
-    while (hashA.length > 0) {
-        var numA = new Number('0x' + hashA.substring(0,8));
-        var numB = new Number('0x' + hashB.substring(0,8));
-        if (numA > numB) { return 1; }
-        if (numB > numA) { return -1; }
-        hashA = hashA.substring(8);
-        hashB = hashB.substring(8);
-    }
-    return 0;
-};
+var strcmp = module.exports.strcmp = function (a, b) {
+    if (PARANOIA && typeof(a) !== 'string') { throw new Error(); }
+    if (PARANOIA && typeof(b) !== 'string') { throw new Error(); }
+    return ( (a === b) ? 0 : ( (a > b) ? 1 : -1 ) );
+}
+
 },
 "Message.js": function(module, exports, require){
-/* vim: set expandtab ts=4 sw=4: */
 /*
- * You may redistribute this program and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 2.1 of the License, or (at your option) any
- * later version.
+ * Copyright 2014 XWiki SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 var Common = require('./Common');
@@ -530,21 +527,23 @@ var hashOf = Message.hashOf = function (msg) {
     msg.authToken = authToken;
     return hash;
 };
+
 },
 "ChainPad.js": function(module, exports, require){
-/* vim: set expandtab ts=4 sw=4: */
 /*
- * You may redistribute this program and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 2.1 of the License, or (at your option) any
- * later version.
+ * Copyright 2014 XWiki SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 var Common = require('./Common');
@@ -772,8 +771,7 @@ var create = ChainPad.create = function (userName, authToken, channelId, initial
         return realtime;
     }
 
-    var initialOp = Operation.create();
-    initialOp.toInsert = initialState;
+    var initialOp = Operation.create(0, 0, initialState);
     var initialStatePatch = Patch.create(zeroPatch.inverseOf.parentHash);
     Patch.addOperation(initialStatePatch, initialOp);
     initialStatePatch.inverseOf = Patch.invert(initialStatePatch, '');
@@ -875,7 +873,9 @@ var applyPatch = function (realtime, author, patch) {
         realtime.uncommitted = Patch.invert(realtime.uncommitted, userInterfaceContent);
 
     } else {
-        realtime.uncommitted = Patch.transform(realtime.uncommitted, patch, realtime.authDoc);
+        realtime.uncommitted =
+            Patch.transform(
+                realtime.uncommitted, patch, realtime.authDoc, realtime.config.transformFunction);
     }
     realtime.uncommitted.parentHash = patch.inverseOf.parentHash;
 
@@ -982,7 +982,7 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
         var pcMsg = parentCount(realtime, msg);
         if (pcBest < pcMsg
           || (pcBest === pcMsg
-            && Common.compareHashes(realtime.best.hashOf, msg.hashOf) > 0))
+            && Common.strcmp(realtime.best.hashOf, msg.hashOf) > 0))
         {
             // switch chains
             while (commonAncestor && !isAncestorOf(realtime, commonAncestor, msg)) {
@@ -1117,16 +1117,10 @@ module.exports.create = function (userName, authToken, channelId, initialState, 
             });
         }),
         remove: enterChainPad(realtime, function (offset, numChars) {
-            var op = Operation.create();
-            op.offset = offset;
-            op.toRemove = numChars;
-            doOperation(realtime, op);
+            doOperation(realtime, Operation.create(offset, numChars, ''));
         }),
         insert: enterChainPad(realtime, function (offset, str) {
-            var op = Operation.create();
-            op.offset = offset;
-            op.toInsert = str;
-            doOperation(realtime, op);
+            doOperation(realtime, Operation.create(offset, 0, str));
         }),
         onMessage: enterChainPad(realtime, function (handler) {
             realtime.onMessage = handler;
@@ -1158,34 +1152,29 @@ module.exports.create = function (userName, authToken, channelId, initialState, 
         }
     };
 };
+
 },
 "Operation.js": function(module, exports, require){
-/* vim: set expandtab ts=4 sw=4: */
 /*
- * You may redistribute this program and/or modify it under the terms of
- * the GNU Lesser General Public License as published by the Free Software
- * Foundation, either version 2.1 of the License, or (at your option) any
- * later version.
+ * Copyright 2014 XWiki SAS
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Lesser General Public License
+ * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 var Common = require('./Common');
 
-var Operation = {};
-var create = Operation.create = function () {
-    return {
-        type: 'Operation',
-        offset: 0,
-        toRemove: 0,
-        toInsert: '',
-    };
-};
+var Operation = module.exports;
+
 var check = Operation.check = function (op, docLength_opt) {
     Common.assert(op.type === 'Operation');
     Common.assert(Common.isUint(op.offset));
@@ -1195,6 +1184,17 @@ var check = Operation.check = function (op, docLength_opt) {
     Common.assert(typeof(docLength_opt) !== 'number' || op.offset + op.toRemove <= docLength_opt);
 };
 
+var create = Operation.create = function (offset, toRemove, toInsert) {
+    var out = {
+        type: 'Operation',
+        offset: offset || 0,
+        toRemove: toRemove || 0,
+        toInsert: toInsert || '',
+    };
+    if (Common.PARANOIA) { check(out); }
+    return out;
+};
+
 var toObj = Operation.toObj = function (op) {
     if (Common.PARANOIA) { check(op); }
     return [op.offset,op.toRemove,op.toInsert];
@@ -1202,21 +1202,11 @@ var toObj = Operation.toObj = function (op) {
 
 var fromObj = Operation.fromObj = function (obj) {
     Common.assert(Array.isArray(obj) && obj.length === 3);
-    var op = create();
-    op.offset = obj[0];
-    op.toRemove = obj[1];
-    op.toInsert = obj[2];
-    if (Common.PARANOIA) { check(op); }
-    return op;
+    return create(obj[0], obj[1], obj[2]);
 };
 
 var clone = Operation.clone = function (op) {
-    if (Common.PARANOIA) { check(op); }
-    var out = create();
-    out.offset = op.offset;
-    out.toRemove = op.toRemove;
-    out.toInsert = op.toInsert;
-    return out;
+    return create(op.offset, op.toRemove, op.toInsert);
 };
 
 /**
@@ -1378,17 +1368,12 @@ var rebase = Operation.rebase = function (oldOp, newOp) {
  * has to be lossy because both operations have the same base and they diverge.
  * This could be made nicer and/or tailored to a specific data type.
  *
- * @param toTransform the operation which is converted, MUTATED
+ * @param toTransform the operation which is converted *MUTATED*.
  * @param transformBy an existing operation which also has the same base.
- * @return nothing, input is mutated
+ * @return toTransform *or* null if the result is a no-op.
  */
-var transform = Operation.transform = function (toTransform, transformBy) {
-    if (Common.PARANOIA) {
-        check(toTransform);
-        check(transformBy);
-    }
+var transform0 = Operation.transform0 = function (text, toTransform, transformBy) {
     if (toTransform.offset > transformBy.offset) {
-        toTransform = clone(toTransform);
         if (toTransform.offset > transformBy.offset + transformBy.toRemove) {
             // simple rebase
             toTransform.offset -= transformBy.toRemove;
@@ -1408,7 +1393,6 @@ var transform = Operation.transform = function (toTransform, transformBy) {
     if (toTransform.offset + toTransform.toRemove < transformBy.offset) {
         return toTransform;
     }
-    toTransform = clone(toTransform);
     toTransform.toRemove = transformBy.offset - toTransform.offset;
     if (toTransform.toInsert.length === 0 && toTransform.toRemove === 0) {
         return null;
@@ -1416,20 +1400,35 @@ var transform = Operation.transform = function (toTransform, transformBy) {
     return toTransform;
 };
 
+/**
+ * @param toTransform the operation which is converted
+ * @param transformBy an existing operation which also has the same base.
+ * @return a modified clone of toTransform *or* toTransform itself if no change was made.
+ */
+var transform = Operation.transform = function (text, toTransform, transformBy, transformFunction) {
+    if (Common.PARANOIA) {
+        check(toTransform);
+        check(transformBy);
+    }
+    transformFunction = transformFunction || transform0;
+    toTransform = clone(toTransform);
+    var result = transformFunction(text, toTransform, transformBy);
+    if (Common.PARANOIA && result) { check(result); }
+    return result;
+};
+
 /** Used for testing. */
 var random = Operation.random = function (docLength) {
     Common.assert(Common.isUint(docLength));
-    var op = create();
-    op.offset = Math.floor(Math.random() * 100000000 % docLength) || 0;
-    op.toRemove = Math.floor(Math.random() * 100000000 % (docLength - op.offset)) || 0;
+    var offset = Math.floor(Math.random() * 100000000 % docLength) || 0;
+    var toRemove = Math.floor(Math.random() * 100000000 % (docLength - offset)) || 0;
+    var toInsert = '';
     do {
-        op.toInsert = Common.randomASCII(Math.floor(Math.random() * 20));
-    } while (op.toRemove === 0 && op.toInsert === '');
-    if (Common.PARANOIA) { check(op); }
-    return op;
+        var toInsert = Common.randomASCII(Math.floor(Math.random() * 20));
+    } while (toRemove === 0 && toInsert === '');
+    return create(offset, toRemove, toInsert);
 };
 
-module.exports = Operation;
 }
 };
 ChainPad = r("ChainPad.js");}());
