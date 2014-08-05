@@ -391,12 +391,12 @@ define([
         };
         var attempt = function (func) {
             return function () {
-                //try {TODO(cjd):
+                try {
                     return func.apply(func, arguments);
-                /*} catch (e) {
+                } catch (e) {
                     error(true, e);
                     throw e;
-                }*/
+                }
             };
         };
         var checkSocket = function () {

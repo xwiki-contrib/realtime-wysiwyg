@@ -601,16 +601,16 @@ console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.len
         if (op.offset + op.toRemove > docText.length) {
             throw new Error();
         }
-        //try {TODO(cjd):
+        try {
             applyHTMLOp(docText, op, dom, rangy, ifrWindow);
             var result = patchString(docText, op.offset, op.toRemove, op.toInsert);
             var innerHTML = getInnerHTML(dom);
             if (result !== innerHTML) { throw new Error(); }
-        /*} catch (err) {
+        } catch (err) {
             if (PARANOIA) { console.log(err.stack); }
             // The big hammer
             dom.innerHTML = patchString(docText, op.offset, op.toRemove, op.toInsert);
-        }*/
+        }
     };
 
     return module.exports;
