@@ -546,8 +546,8 @@ define([
         $('#mainEditArea .buttons').append(
             '<div class="rtwysiwyg-allow-outerdiv">' +
                 '<label class="rtwysiwyg-allow-label" for="' + allowRealtimeCbId + '">' +
-                    '<input type="checkbox" class="rtwysiwyg-allow" id="' + allowRealtimeCbId + '" ' +
-                        checked + '" />' +
+                    '<input type="checkbox" class="rtwysiwyg-allow" id="' + allowRealtimeCbId +
+                        '" ' + checked + '" />' +
                     ' ' + messages.allowRealtime +
                 '</label>' +
             '</div>'
