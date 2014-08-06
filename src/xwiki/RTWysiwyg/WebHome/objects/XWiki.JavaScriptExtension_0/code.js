@@ -43,28 +43,24 @@
     var userName = USER + '-' + encodeURIComponent(PRETTY_USER + '-').replace(/-/g, '%2d') +
         String(Math.random()).substring(2);
 
-    require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function () { });
+    require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
 
-    document.observe('xwiki:wysiwyg:showWysiwyg', function(event) {
-        require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
+        // GWT is catching all of the errors.
+        window.onerror = null;
 
-            // GWT is catching all of the errors.
-            window.onerror = null;
+        var language = $('form#edit input[name="language"]').attr('value');
+        if (language === '' || language === 'default') { language = DEFAULT_LANGUAGE; }
 
-            var language = $('form#edit input[name="language"]').attr('value');
-            if (language === '' || language === 'default') { language = DEFAULT_LANGUAGE; }
+        var channel = JSON.stringify([
+            XWiki.currentWiki,
+            XWiki.currentSpace,
+            XWiki.currentPage,
+            language,
+            'rtwysiwyg'
+        ]);
 
-            var channel = JSON.stringify([
-                XWiki.currentWiki,
-                XWiki.currentSpace,
-                XWiki.currentPage,
-                language,
-                'rtwysiwyg'
-            ]);
+        RTWysiwyg.main(WEBSOCKET_URL, userName, MESSAGES, channel, DEMO_MODE, language);
 
-            RTWysiwyg.main(WEBSOCKET_URL, userName, MESSAGES, channel, DEMO_MODE, language);
-
-        });
     });
 
 }());

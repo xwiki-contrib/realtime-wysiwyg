@@ -48,6 +48,9 @@ define([
     /** Id of the div containing the lag info. */
     var LAG_ELEM_CLS = 'rtwysiwyg-lag';
 
+    /** Key in the localStore which indicates realtime activity should be disallowed. */
+    var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
+
     // ------------------ Trapping Keyboard Events ---------------------- //
 
     var bindEvents = function (element, events, callback, unbind) {
@@ -520,6 +523,14 @@ define([
         });
     };
 
+    var waitForWysiwyg = function (func) {
+        if (document.getElementsByClassName('xRichTextEditor').length) {
+            func();
+        } else {
+            setTimeout(function () { waitForWysiwyg(func); }, 10);
+        }
+    };
+
     var main = module.exports.main =
         function (websocketUrl, userName, messages, channel, demoMode, language)
     {
@@ -534,7 +545,10 @@ define([
 
         var hasActiveRealtimeSession = function () {
             forceLink.text(messages.joinSession);
-            forceLink.attr('href', forceLink.attr('href') + '&editor=wysiwyg');
+            var href = forceLink.attr('href');
+            href = href.replace(/editor=(wiki|inline)[\&]?/, '');
+            href = href + '&editor=wysiwyg';
+            forceLink.attr('href', href);
         };
 
         if (forceLink.length && !localStorage.getItem(LOCALSTORAGE_DISALLOW)) {
@@ -542,19 +556,19 @@ define([
             var socket = new WebSocket(websocketUrl);
             socket.onopen = function (evt) {
                 socket.onmessage = function (evt) {
-                    debug("Message! " + evt.data);
                     if (evt.data !== ('0:' + channel.length + ':' + channel + '5:[1,0]')) {
-                        debug("hasActiveRealtimeSession");
                         socket.close();
                         hasActiveRealtimeSession();
                     }
                 };
                 socket.send('1:x' + userName.length + ':' + userName +
                     channel.length + ':' + channel + '3:[0]');
-                debug("Bound websocket");
             };
         } else if (window.XWiki.editor === 'wysiwyg' || demoMode) {
-            editor(websocketUrl, userName, messages, channel, demoMode, language);
+            // xwiki:wysiwyg:showWysiwyg appears unreliable.
+            waitForWysiwyg(function () {
+                editor(websocketUrl, userName, messages, channel, demoMode, language);
+            });
         }
     };
 
