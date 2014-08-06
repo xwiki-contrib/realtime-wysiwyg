@@ -40,13 +40,16 @@ define([
     var MAX_LAG_BEFORE_DISCONNECT = 20000;
 
     /** Id of the element for getting debug info. */
-    var DEBUG_LINK_ID = 'rtwysiwyg-debug-link';
+    var DEBUG_LINK_CLS = 'rtwysiwyg-debug-link';
 
     /** Id of the div containing the user list. */
     var USER_LIST_CLS = 'rtwysiwyg-user-list';
 
     /** Id of the div containing the lag info. */
     var LAG_ELEM_CLS = 'rtwysiwyg-lag';
+
+    /** The toolbar class which contains the user list, debug link and lag. */
+    var TOOLBAR_CLS = 'rtwysiwyg-toolbar';
 
     /** Key in the localStore which indicates realtime activity should be disallowed. */
     var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
@@ -88,7 +91,7 @@ define([
     {
         var meIdx = userList.indexOf(myUserName);
         if (meIdx === -1) {
-            console.log("user list ["+userList+"] does not contain self ["+myUserName+"]...");
+            //console.log("user list ["+userList+"] does not contain self ["+myUserName+"]...");
             listElement.textContent = "Disconnected";
             return;
         }
@@ -263,7 +266,7 @@ define([
     var createDebugLink = function (realtime, iframeDoc, allMessages, toolbar, messages) {
         var id = uid();
         toolbar.find('.rtwysiwyg-toolbar-rightside').append(
-            '<a href="#" id="' + id + '" class="rtwysiwyg-debug-link">' + messages.debug + '</a>'
+            '<a href="#" id="' + id + '" class="' + DEBUG_LINK_CLS + '">' + messages.debug + '</a>'
         );
         $('#'+id).on('click', function () {
             var debugInfo =
@@ -298,18 +301,15 @@ define([
     var createRealtimeToolbar = function (container) {
         var id = uid();
         $(container).prepend(
-            '<div class="rtwysiwyg-toolbar" id="' + id + '">' +
+            '<div class="' + TOOLBAR_CLS + '" id="' + id + '">' +
                 '<div class="rtwysiwyg-toolbar-leftside"></div>' +
                 '<div class="rtwysiwyg-toolbar-rightside"></div>' +
             '</div>'
         );
-        return $('#'+id);
-    };
-
-    var setStyle = function () {
-        $('head').append([
+        var toolbar = $('#'+id);
+        toolbar.append([
             '<style>',
-            '.rtwysiwyg-toolbar {',
+            '.' + TOOLBAR_CLS + ' {',
             '    color: #666;',
             '    font-weight: bold;',
             '    background-color: #f0f0ee;',
@@ -320,7 +320,7 @@ define([
             '    border-left: 2px solid #CCC;',
             '    height: 24px;',
             '}',
-            '.rtwysiwyg-toolbar div {',
+            '.' + TOOLBAR_CLS + ' div {',
             '    padding: 0 10px;',
             '    height: 1.5em;',
             '    background: #f0f0ee;',
@@ -339,11 +339,12 @@ define([
             '.gwt-TabBar {',
             '    display:none;',
             '}',
-            '.rtwysiwyg-debug-link:link { color:transparent; }',
-            '.rtwysiwyg-debug-link:link:hover { color:blue; }',
+            '.' + DEBUG_LINK_CLS + ':link { color:transparent; }',
+            '.' + DEBUG_LINK_CLS + ':link:hover { color:blue; }',
             '.gwt-TabPanelBottom { border-top: 0 none; }',
             '</style>'
          ].join(''));
+        return toolbar;
     };
 
     var makeWebsocket = function (url) {
@@ -354,6 +355,7 @@ define([
             onError: [],
             onMessage: [],
             send: function (msg) { socket.send(msg); },
+            close: function () { socket.close(); },
             _socket: socket
         };
         var mkHandler = function (name) {
@@ -370,11 +372,8 @@ define([
         return out;
     };
 
-    var editor = function (websocketUrl, userName, messages, channel, demoMode, language) {
-
-        if (checkSectionEdit()) { return; }
-        setStyle();
-
+    var startWebSocket = function (websocketUrl, userName, messages, channel, demoMode, language)
+    {
         var passwd = 'y';
         var wysiwygDiv = document.getElementsByClassName('xRichTextEditor')[0];
         var ifr = wysiwygDiv.getElementsByClassName('gwt-RichTextArea')[0];
@@ -383,6 +382,10 @@ define([
 
         var toolbar = createRealtimeToolbar('#xwikieditcontent');
 
+        socket.onClose.push(function () {
+            $(toolbar).remove();
+        });
+
         var allMessages = [];
         var isErrorState = false;
         var initializing = true;
@@ -390,7 +393,7 @@ define([
         var error = function (recoverable, err) {
             if (recoverable && recoverableErrorCount++ < MAX_RECOVERABLE_ERRORS) { return; }
             isErrorState = true;
-            handleError(socket, realtime, err, getDocHTML(doc), allMessages);
+            handleError(socket, socket.realtime, err, getDocHTML(doc), allMessages);
         };
         var attempt = function (func) {
             return function () {
@@ -403,7 +406,7 @@ define([
             };
         };
         var checkSocket = function () {
-            if (isSocketDisconnected(socket, realtime)) {
+            if (isSocketDisconnected(socket, realtime) && !socket.intentionallyClosing) {
                 isErrorState = true;
                 abort(socket, realtime);
                 ErrorBox.show('disconnected', getDocHTML(doc));
@@ -413,13 +416,16 @@ define([
         };
 
         socket.onOpen.push(function(evt) {
-            realtime = ChainPad.create(userName,
-                                       passwd,
-                                       channel,
-                                       getDocHTML(doc),
-                                       { transformFunction: Otaml.transform });
+
+            var realtime = socket.realtime =
+                ChainPad.create(userName,
+                                passwd,
+                                channel,
+                                getDocHTML(doc),
+                                { transformFunction: Otaml.transform });
 
             createDebugLink(realtime, doc, allMessages, toolbar, messages);
+
             createLagElement(socket,
                              realtime,
                              toolbar.find('.rtwysiwyg-toolbar-rightside'),
@@ -519,8 +525,52 @@ define([
 
             realtime.start();
 
-            console.log('started');
+            //console.log('started');
         });
+        return socket;
+    };
+
+    var stopWebSocket = function (socket) {
+        if (!socket) { return; }
+        socket.intentionallyClosing = true;
+        if (socket.realtime) { socket.realtime.abort(); }
+        socket.close();
+    };
+
+    var editor = function (websocketUrl, userName, messages, channel, demoMode, language) {
+
+        if (checkSectionEdit()) { return; }
+
+        var checked = (localStorage.getItem(LOCALSTORAGE_DISALLOW)) ? "" : 'checked="checked"';
+        var allowRealtimeCbId = uid();
+        $('#mainEditArea .buttons').append(
+            '<div class="rtwysiwyg-allow-outerdiv">' +
+                '<label class="rtwysiwyg-allow-label" for="' + allowRealtimeCbId + '">' +
+                    '<input type="checkbox" class="rtwysiwyg-allow" id="' + allowRealtimeCbId + '" ' +
+                        checked + '" />' +
+                    ' ' + messages.allowRealtime +
+                '</label>' +
+            '</div>'
+        );
+
+        var socket;
+        var checkboxClick = function (checked) {
+            if (checked || demoMode) {
+                localStorage.removeItem(LOCALSTORAGE_DISALLOW);
+                socket = startWebSocket(websocketUrl,
+                                        userName,
+                                        messages,
+                                        channel,
+                                        demoMode,
+                                        language);
+            } else if (socket) {
+                localStorage.setItem(LOCALSTORAGE_DISALLOW, 1);
+                stopWebSocket(socket);
+                socket = undefined;
+            }
+        };
+        $('#'+allowRealtimeCbId).click(function () { checkboxClick(this.checked); });
+        checkboxClick(checked);
     };
 
     var waitForWysiwyg = function (func) {
