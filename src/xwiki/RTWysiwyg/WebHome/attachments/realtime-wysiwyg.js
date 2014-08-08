@@ -574,7 +574,8 @@ define([
     };
 
     var waitForWysiwyg = function (func) {
-        if (document.getElementsByClassName('xRichTextEditor').length) {
+        var ifr = document.getElementsByClassName('gwt-RichTextArea');
+        if (ifr[0] && ifr[0].contentWindow) {
             func();
         } else {
             setTimeout(function () { waitForWysiwyg(func); }, 10);
@@ -616,8 +617,10 @@ define([
             };
         } else if (window.XWiki.editor === 'wysiwyg' || demoMode) {
             // xwiki:wysiwyg:showWysiwyg appears unreliable.
-            waitForWysiwyg(function () {
-                editor(websocketUrl, userName, messages, channel, demoMode, language);
+            document.observe('xwiki:wysiwyg:showWysiwyg', function () {
+                waitForWysiwyg(function () {
+                    editor(websocketUrl, userName, messages, channel, demoMode, language);
+                });
             });
         }
     };
