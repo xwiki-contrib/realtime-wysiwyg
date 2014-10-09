@@ -14,8 +14,9 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-define(function () {
+define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
 
+    var Otaml = window.Otaml;
     var module = { exports: {} };
     var PARANOIA = true;
 
@@ -50,44 +51,12 @@ define(function () {
         return e.childNodes[0];
     };
 
-    var indexOfSkipQuoted = function (haystack, needle)
-    {
-        var os = 0;
-        for (;;) {
-            var dqi = haystack.indexOf('"');
-            var sqi = haystack.indexOf("'");
-            var needlei = haystack.indexOf(needle);
-            if (needlei === -1) { return -1; }
-            if (dqi > -1 && dqi < sqi && dqi < needlei) {
-                dqi = haystack.indexOf('"', dqi+1);
-                if (dqi === -1) { throw new Error(); }
-                haystack = haystack.substring(dqi);
-                os += dqi;
-            } else if (sqi > -1 && sqi < needlei) {
-                sqi = haystack.indexOf('"', sqi+1);
-                if (sqi === -1) { throw new Error(); }
-                haystack = haystack.substring(sqi);
-                os += sqi;
-            } else {
-                return needlei + os;
-            }
-        }
-    };
-
-    var tagWidth = function (nodeOuterHTML)
-    {
-        if (nodeOuterHTML.length < 2 || nodeOuterHTML[1] === '!' || nodeOuterHTML[0] !== '<') {
-            return 0;
-        }
-        return indexOfSkipQuoted(nodeOuterHTML, '>') + 1;
-    };
-
     var getInnerHTML = function (node)
     {
         var html = node.innerHTML;
         if (html) { return html; }
         var outerHTML = getOuterHTML(node);
-        var tw = tagWidth(outerHTML);
+        var tw = Otaml.tagWidth(outerHTML);
         if (!tw) { return outerHTML; }
         return outerHTML.substring(tw, outerHTML.lastIndexOf('</'));
     };
@@ -126,7 +95,7 @@ define(function () {
         return idx;
     };
 
-    var patchString = function (oldString, offset, toRemove, toInsert)
+    var patchString = module.exports.patchString = function (oldString, offset, toRemove, toInsert)
     {
         return oldString.substring(0, offset) + toInsert + oldString.substring(offset + toRemove);
     };
@@ -145,7 +114,7 @@ define(function () {
             }
             if (idx + childOuterHTML.length > offset) {
                 var childInnerHTML = childOuterHTML;
-                var tw = tagWidth(childOuterHTML);
+                var tw = Otaml.tagWidth(childOuterHTML);
                 if (tw) {
                     childInnerHTML = childOuterHTML.substring(tw, childOuterHTML.lastIndexOf('</'));
                 }
@@ -174,58 +143,28 @@ define(function () {
         return { node: dom, pos: offset };
     };
 
-    var makeTextOperation = module.exports.makeTextOperation = function(oldval, newval)
-    {
-        if (oldval === newval) { return; }
-
-        var begin = 0;
-        for (; oldval[begin] === newval[begin]; begin++) ;
-
-        var end = 0;
-        for (var oldI = oldval.length, newI = newval.length;
-             oldval[--oldI] === newval[--newI];
-             end++) ;
-
-        if (end >= oldval.length - begin) { end = oldval.length - begin; }
-        if (end >= newval.length - begin) { end = newval.length - begin; }
-
-        return {
-            offset: begin,
-            toRemove: oldval.length - begin - end,
-            toInsert: newval.slice(begin, newval.length - end),
-        };
-    };
+    var nodeId = function (node) {
+        var nn = node.nodeName;
+        if (nn === '#text') { return encodeURI(node.textContent); }
+        return ' ' + nn;
+    }
 
     var getChildPath = function (parent) {
         var out = [];
         for (var next = parent; next; next = getNextSiblingDeep(next, parent)) {
-            out.push(next.nodeName);
+            out.push(nodeId(next));
         }
         return out;
-    };
-
-    var getNodePath = function (parent, node) {
-        var before = [];
-        var next = parent;
-        for (; next && next !== node; next = getNextSiblingDeep(next, parent)) {
-            before.push(next.nodeName);
-        }
-        if (next !== node) { throw new Error(); }
-
-        var after = [];
-        for (; next; next = getNextSiblingDeep(next, parent)) {
-            after.push(next.nodeName);
-        }
-
-        return [ before, after ];
     };
 
     var relocatedPositionInNode = function (newNode, oldNode, offset)
     {
         if (newNode.nodeName !== '#text' || oldNode.nodeName !== '#text' || offset === 0) {
             offset = 0;
-        } else if (offset >= newNode.length) {
-            offset = newNode.length - 1;
+        } else if (oldNode.data === newNode.data) {
+            // fallthrough
+        } else if (offset > newNode.length) {
+            offset = newNode.length;
         } else if (oldNode.data.substring(0, offset) === newNode.data.substring(0, offset)) {
             // keep same offset and fall through
         } else {
@@ -241,45 +180,70 @@ define(function () {
         return { node: newNode, pos: offset };
     };
 
+    var tryFromBeginning = function (oldPath, newPath) {
+        for (var i = 0; i < oldPath.length; i++) {
+            if (oldPath[i] !== newPath[i]) { return i; }
+        }
+        return oldPath.length;
+    };
+
+    var tryFromEnd = function (oldPath, newPath) {
+        for (var i = 1; i <= oldPath.length; i++) {
+            if (oldPath[oldPath.length - i] !== newPath[newPath.length - i]) {
+                //return newPath.length - i;
+                return false;
+            }
+        }
+        return true;
+        //return newPath.length - oldPath.length - 1;
+    };
+
+    /**
+     * returns 2 arrays (before and after).
+     * before is string representations (see nodeId()) of all nodes before the target
+     * node and after is representations of all nodes which follow.
+     */
+    var getNodePaths = function (parent, node) {
+        var before = [];
+        var next = parent;
+        for (; next && next !== node; next = getNextSiblingDeep(next, parent)) {
+            before.push(nodeId(next));
+        }
+
+        if (next !== node) { throw new Error(); }
+
+        var after = [];
+        next = getNextSiblingDeep(next, parent);
+        for (; next; next = getNextSiblingDeep(next, parent)) {
+            after.push(nodeId(next));
+        }
+
+        return { before: before, after: after };
+    };
+
     var getRelocatedPosition = function (newParent, oldParent, oldNode, oldOffset)
     {
-        if (oldNode === oldParent) {
-            return relocatedPositionInNode(newParent, oldNode, oldOffset);
-        }
         var newPath = getChildPath(newParent);
-
         if (newPath.length === 1) {
             return { node: null, pos: 0 };
         }
+        var oldPaths = getNodePaths(oldParent, oldNode);
 
-        var oldPaths = getNodePath(oldParent, oldNode);
-
-        // The outside tags are <div> and <head> or something so we skip the first.
-        newPath.shift();
-        oldPaths[0].shift();
-        var out = getNextSiblingDeep(newParent);
-
-        var newPathJoined = newPath.join('|');
-        if (newPathJoined.indexOf(oldPaths[0].join('|')) === 0) {
-            for (var i = 1; i < oldPaths[0].length; i++) {
-                out = getNextSiblingDeep(out);
-            }
-            return relocatedPositionInNode(out, oldNode, oldOffset);
-        }
-        var oldPathOneJoined = oldPaths[1].join('|');
-        if (newPathJoined.indexOf(oldPathOneJoined) ===
-            (newPathJoined.length - oldPathOneJoined.length))
-        {
-            for (var i = 0; i < newPath.length - oldPaths[1].length; i++) {
-                out = getNextSiblingDeep(out);
-            }
-            return relocatedPositionInNode(out, oldNode, oldOffset);
+        var idx = -1;
+        var fromBeginning = tryFromBeginning(oldPaths.before, newPath);
+        if (fromBeginning === oldPaths.before.length) {
+            idx = oldPaths.before.length;
+        } else if (tryFromEnd(oldPaths.after, newPath)) {
+            idx = (newPath.length - oldPaths.after.length - 1);
+        } else {
+            idx = fromBeginning;
         }
 
-console.log("Could not locate node in [" + newPathJoined + "] [" + oldPaths[0].join("|") + "] [" + oldPathOneJoined + "]");
-console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.length - oldPathOneJoined.length));
-
-        return { node: newParent, pos: 0 };
+        var out = newParent;
+        for (var i = 0; i < idx; i++) {
+            out = getNextSiblingDeep(out);
+        }
+        return relocatedPositionInNode(out, oldNode, oldOffset);
     };
 
     // We can't create a real range until the new parent is installed in the document
@@ -334,6 +298,13 @@ console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.len
         }
     };
 
+    var isAncestorOf = function (maybeDecendent, maybeAncestor) {
+        while ((maybeDecendent = maybeDecendent.parentNode)) {
+            if (maybeDecendent === maybeAncestor) { return true; }
+        }
+        return false;
+    };
+
     var getSelectedRange = function (rangy, ifrWindow, selection) {
         selection = selection || rangy.getSelection(ifrWindow);
         if (selection.rangeCount === 0) {
@@ -347,174 +318,14 @@ console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.len
 
         // Occasionally, some browsers *cough* firefox *cough* will attach the range to something
         // which has been used in the past but is nolonger part of the dom...
-        if (!range.startContainer || !ifrWindow.document.getElementById(range.startContainer)) {
-            return;
+        if (range.startContainer &&
+            isAncestorOf(range.startContainer, ifrWindow.document))
+        {
+            return range;
         }
 
-        return range;
+        return;
     };
-
-    var makeHTMLOperation = module.exports.makeHTMLOperation = (function () {
-
-        var VOID_TAG_REGEX = new RegExp('^(' + [
-            'area',
-            'base',
-            'br',
-            'col',
-            'hr',
-            'img',
-            'input',
-            'link',
-            'meta',
-            'param',
-            'command',
-            'keygen',
-            'source',
-        ].join('|') + ')$');
-
-        // Get the offset of the previous open/close/void tag.
-        // returns the offset of the opening angle bracket.
-        var getPreviousTagIdx = function (data, idx)
-        {
-            if (idx === 0) { return -1; }
-            idx = data.lastIndexOf('>', idx);
-            // The html tag from hell:
-            // < abc def="g<hi'j >" k='lm"nopw>"qrstu"<vw'   >
-            for (;;) {
-                var mch = data.substring(0,idx).match(/[<"'][^<'"]*$/);
-                if (!mch) { return -1; }
-                if (mch[0][0] === '<') { return mch.index; }
-                idx = data.lastIndexOf(mch[0][0], mch.index-1);
-            }
-        };
-
-        /**
-         * Get the name of an HTML tag with leading / if the tag is an end tag.
-         *
-         * @param data the html text
-         * @param offset the index of the < bracket.
-         * @return the tag name with possible leading slash.
-         */
-        var getTagName = function (data, offset)
-        {
-            if (data[offset] !== '<') { throw new Error(); }
-            // Match ugly tags like <   /   xxx>
-            // or <   xxx  y="z" >
-            var m = data.substring(offset).match(/^(<[\s\/]*)([a-zA-Z0-9_-]+)/);
-            if (!m) { throw new Error("could not get tag name"); }
-            if (m[1].indexOf('/') !== -1) { return '/'+m[2]; }
-            return m[2];
-        };
-
-        /**
-         * Get the previous non-void opening tag.
-         *
-         * @param data the document html
-         * @param ctx an empty map for the first call, the same element thereafter.
-         * @return an array containing the offset of the open bracket for the begin tag and the
-         *         the offset of the open bracket for the matching end tag.
-         */
-        var getPreviousNonVoidTag = function (data, ctx)
-        {
-            for (;;) {
-                if (typeof(ctx.offsets) === 'undefined') {
-                    // ' ' is an invalid html element name so it will never match anything.
-                    ctx.offsets = [ { idx: data.length, name: ' ' } ];
-                    ctx.idx = data.length;
-                }
-
-                var prev = ctx.idx = getPreviousTagIdx(data, ctx.idx);
-                if (prev === -1) {
-                    if (ctx.offsets.length > 1) { throw new Error(); }
-                    return [ 0, data.length ];
-                }
-                var prevTagName = getTagName(data, prev);
-
-                if (prevTagName[0] === '/') {
-                    ctx.offsets.push({ idx: prev, name: prevTagName.substring(1) });
-                } else if (prevTagName === ctx.offsets[ctx.offsets.length-1].name) {
-                    var os = ctx.offsets.pop();
-                    return [ prev, os.idx ];
-                } else if (!VOID_TAG_REGEX.test(prevTagName)) {
-                    throw new Error();
-                }
-            }
-        };
-
-        var makeOperation = function (oldval, newval)
-        {
-            var op = makeTextOperation(oldval, newval);
-            if (!op) { return; }
-
-            var end = op.offset + op.toRemove;
-            var lastTag;
-            var tag;
-            var ctx = {};
-            do {
-                lastTag = tag;
-                tag = getPreviousNonVoidTag(oldval, ctx);
-            } while (tag[0] > op.offset || tag[1] < end);
-
-            if (lastTag
-                && end < lastTag[0]
-                && op.offset > tag[0] + tagWidth(oldval.substring(tag[0])))
-            {
-                // plain old text operation.
-                if (op.toRemove && oldval.substr(op.offset, op.toRemove).indexOf('<') !== -1) {
-                    throw new Error();
-                }
-                return op;
-            }
-
-            op.offset = tag[0];
-            op.toRemove = tag[1] - tag[0];
-            op.toInsert = newval.slice(tag[0], newval.length - (oldval.length - tag[1]));
-
-            if (PARANOIA) {
-                // simulate running the patch.
-                var res = patchString(oldval, op.offset, op.toRemove, op.toInsert);
-                if (res !== newval) {
-                    console.log(op);
-                    console.log(oldval);
-                    console.log(newval);
-                    console.log(res);
-                    throw new Error();
-                }
-
-                // check matching bracket count
-                // TODO(cjd): this can fail even if the patch is valid because of brackets in
-                //            html attributes.
-                var removeText = oldval.substring(op.offset, op.offset + op.toRemove);
-                if (((removeText).match(/</g) || []).length !==
-                    ((removeText).match(/>/g) || []).length)
-                {
-                    throw new Error();
-                }
-
-                if (((op.toInsert).match(/</g) || []).length !==
-                    ((op.toInsert).match(/>/g) || []).length)
-                {
-                    throw new Error();
-                }
-            }
-
-            return op;
-        };
-
-        return function (oldval, newval) {
-            try {
-                return makeOperation(oldval, newval);
-            } catch (e) {
-                if (PARANOIA) { console.log(e.stack); }
-                return {
-                    offset: 0,
-                    toRemove: oldval.length,
-                    toInsert: newval
-                };
-            }
-        };
-
-    })();
 
     var applyHTMLOp = function (docText, op, dom, rangy, ifrWindow)
     {
@@ -539,7 +350,7 @@ console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.len
             var tw = 0;
             if (parent !== dom) {
                 indexOfOuterHTML = offsetOfNodeOuterHTML(docText, parent, dom, ifrWindow);
-                tw = tagWidth(docText.substring(indexOfOuterHTML));
+                tw = Otaml.tagWidth(docText.substring(indexOfOuterHTML));
             }
             indexOfInnerHTML = indexOfOuterHTML + tw;
 
@@ -593,19 +404,57 @@ console.log(newPathJoined.indexOf(oldPathOneJoined) + "   " + (newPathJoined.len
         return;
     };
 
+    var applyHTMLOpHammer = function (docText, op, dom, rangy, ifrWindow)
+    {
+        var newDocText = patchString(docText, op.offset, op.toRemove, op.toInsert);
+        var babysitter = ifrWindow.document.createElement('body');
+        // give it a uid so that we can prove later that it's not in the document,
+        // see getSelectedRange()
+        babysitter.setAttribute('id', uniqueId());
+        babysitter.innerHTML = newDocText;
+
+        var range = getSelectedRange(rangy, ifrWindow);
+
+        // doesn't intersect at all
+        if (!range) {
+            replaceAllChildren(dom, babysitter);
+            return;
+        }
+
+        var pseudoRange = getRelocatedPseudoRange(babysitter, dom, range, rangy);
+        range.detach();
+        replaceAllChildren(dom, babysitter);
+        if (pseudoRange.start.node) {
+            var selection = rangy.getSelection(ifrWindow);
+            var newRange = rangy.createRange();
+            newRange.setStart(pseudoRange.start.node, pseudoRange.start.pos);
+            newRange.setEnd(pseudoRange.end.node, pseudoRange.end.pos);
+            selection.setSingleRange(newRange);
+        }
+        return;
+    };
+
     /* Return whether the selection range has been "dirtied" and needs to be reloaded. */
     var applyOp = module.exports.applyOp = function (docText, op, dom, rangy, ifrWindow)
     {
-        if (PARANOIA && docText !== dom.innerHTML) { throw new Error(); }
+        if (PARANOIA && docText !== getInnerHTML(dom)) { throw new Error(); }
 
         if (op.offset + op.toRemove > docText.length) {
             throw new Error();
         }
         try {
-            applyHTMLOp(docText, op, dom, rangy, ifrWindow);
+            applyHTMLOpHammer(docText, op, dom, rangy, ifrWindow);
             var result = patchString(docText, op.offset, op.toRemove, op.toInsert);
             var innerHTML = getInnerHTML(dom);
-            if (result !== innerHTML) { throw new Error(); }
+            if (result !== innerHTML) {
+                $(document.body).append('<textarea id="statebox"></textarea>');
+                $(document.body).append('<textarea id="errorbox"></textarea>');
+                var SEP = '\n\n\n\n\n\n\n\n\n\n';
+                $('#statebox').val(docText + SEP + result + SEP + innerHTML);
+                var diff = Otaml.makeTextOperation(result, innerHTML);
+                $('#errorbox').val(JSON.stringify(op) + '\n' + JSON.stringify(diff));
+                throw new Error();
+            }
         } catch (err) {
             if (PARANOIA) { console.log(err.stack); }
             // The big hammer

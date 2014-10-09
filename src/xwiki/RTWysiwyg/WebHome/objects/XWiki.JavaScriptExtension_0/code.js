@@ -28,7 +28,8 @@
     };
     // END_VELOCITY
 
-    for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
+    //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
+    for (var path in PATHS) { PATHS[path] = PATHS[path] + '?cb='+(new Date()).getTime(); }
     require.config({paths:PATHS});
 
     if (!window.XWiki) {

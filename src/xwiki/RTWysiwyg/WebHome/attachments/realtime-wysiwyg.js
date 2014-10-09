@@ -27,6 +27,7 @@ define([
     Rangy.init();
     var ChainPad = window.ChainPad;
     var Otaml = window.Otaml;
+    var PARANOIA = true;
 
     var module = { exports: {} };
 
@@ -227,23 +228,105 @@ define([
         return doc.body.innerHTML;
     };
 
+    var makeHTMLOperation = function (oldval, newval) {
+        try {
+            var op = Otaml.makeHTMLOperation(oldval, newval);
+
+            if (PARANOIA && op) {
+                // simulate running the patch.
+                var res = HTMLPatcher.patchString(oldval, op.offset, op.toRemove, op.toInsert);
+                if (res !== newval) {
+                    console.log(op);
+                    console.log(oldval);
+                    console.log(newval);
+                    console.log(res);
+                    throw new Error();
+                }
+
+                // check matching bracket count
+                // TODO(cjd): this can fail even if the patch is valid because of brackets in
+                //            html attributes.
+                var removeText = oldval.substring(op.offset, op.offset + op.toRemove);
+                if (((removeText).match(/</g) || []).length !==
+                    ((removeText).match(/>/g) || []).length)
+                {
+                    throw new Error();
+                }
+
+                if (((op.toInsert).match(/</g) || []).length !==
+                    ((op.toInsert).match(/>/g) || []).length)
+                {
+                    throw new Error();
+                }
+            }
+
+            return op;
+
+        } catch (e) {
+            if (PARANOIA) {
+                $(document.body).append('<textarea id="makeOperationErr"></textarea>');
+                $('#makeOperationErr').val(oldval + '\n\n\n\n\n\n\n\n\n\n' + newval);
+                console.log(e.stack);
+            }
+            return {
+                offset: 0,
+                toRemove: oldval.length,
+                toInsert: newval
+            };
+        }
+    };
+
     // chrome sometimes generates invalid html but it corrects it the next time around.
     var fixChrome = function (docText, doc, contentWindow) {
         for (var i = 0; i < 10; i++) {
             var docElem = doc.createElement('div');
             docElem.innerHTML = docText;
             var newDocText = docElem.innerHTML;
-            var fixChromeOp = HTMLPatcher.makeHTMLOperation(docText, newDocText);
-            if (!fixChromeOp) { return; }            
+            var fixChromeOp = makeHTMLOperation(docText, newDocText);
+            if (!fixChromeOp) { return docText; }
             HTMLPatcher.applyOp(docText,
                                 fixChromeOp,
                                 doc.body,
                                 Rangy,
                                 contentWindow);
             docText = getDocHTML(doc);
-            if (newDocText === docText) { return; }
+            if (newDocText === docText) { return docText; }
         }
         throw new Error();
+    };
+
+    var fixSafari_STATE_OUTSIDE = 0;
+    var fixSafari_STATE_IN_TAG =  1;
+    var fixSafari_STATE_IN_ATTR = 2;
+    var fixSafari_HTML_ENTITIES_REGEX = /('|"|<|>|&lt;|&gt;)/g;
+
+    var fixSafari = function (html) {
+        var state = fixSafari_STATE_OUTSIDE;
+        return html.replace(fixSafari_HTML_ENTITIES_REGEX, function (x) {
+            switch (state) {
+                case fixSafari_STATE_OUTSIDE: {
+                    if (x === '<') { state = fixSafari_STATE_IN_TAG; }
+                    return x;
+                }
+                case fixSafari_STATE_IN_TAG: {
+                    switch (x) {
+                        case '"': state = fixSafari_STATE_IN_ATTR; break;
+                        case '>': state = fixSafari_STATE_OUTSIDE; break;
+                        case "'": throw new Error("single quoted attribute");
+                    }
+                    return x;
+                }
+                case fixSafari_STATE_IN_ATTR: {
+                    switch (x) {
+                        case '&lt;': return '<';
+                        case '&gt;': return '>';
+                        case '"': state = fixSafari_STATE_IN_TAG; break;
+                    }
+                    return x;
+                }
+            };
+            throw new Error();
+        });
     };
 
     var checkSectionEdit = function () {
@@ -313,19 +396,21 @@ define([
             '    color: #666;',
             '    font-weight: bold;',
             '    background-color: #f0f0ee;',
-            '    border: 0, none;',
             '    border-bottom: 1px solid #DDD;',
             '    border-top: 3px solid #CCC;',
             '    border-right: 2px solid #CCC;',
             '    border-left: 2px solid #CCC;',
-            '    height: 24px;',
+            '    height: 26px;',
+            '    margin-bottom: -3px;',
+            '    display: inline-block;',
+            '    width: 100%;',
             '}',
             '.' + TOOLBAR_CLS + ' div {',
             '    padding: 0 10px;',
             '    height: 1.5em;',
             '    background: #f0f0ee;',
             '    line-height: 25px;',
-            '    height: 24px;',
+            '    height: 22px;',
             '}',
             '.rtwysiwyg-toolbar-leftside {',
             '    float: left;',
@@ -343,7 +428,7 @@ define([
             '.' + DEBUG_LINK_CLS + ':link:hover { color:blue; }',
             '.gwt-TabPanelBottom { border-top: 0 none; }',
             '</style>'
-         ].join(''));
+         ].join('\n'));
         return toolbar;
     };
 
@@ -443,11 +528,17 @@ define([
                 var oldDocText = realtime.getUserDoc();
 
                 var docText = getDocHTML(doc);
+
+                //attempt(fixChrome)(docText, doc, ifr.contentWindow);
+                //docText = attempt(fixSafari)(docText);
+try {
+                docText = fixChrome(docText, doc, ifr.contentWindow);
+                docText = fixSafari(docText);
+} catch (e) { console.log(e.stack); }
+
                 if (oldDocText === docText) { return; }
 
-                attempt(fixChrome)(docText, doc, ifr.contentWindow);
-
-                var op = attempt(HTMLPatcher.makeTextOperation)(oldDocText, docText);
+                var op = attempt(Otaml.makeTextOperation)(oldDocText, docText);
 
                 if (op.toRemove > 0) {
                     attempt(realtime.remove)(op.offset, op.toRemove);
@@ -471,7 +562,7 @@ define([
 
                 var docText = getDocHTML(doc);
                 var rtDoc = realtime.getUserDoc();
-                var op = attempt(HTMLPatcher.makeHTMLOperation)(docText, rtDoc);
+                var op = attempt(makeHTMLOperation)(docText, rtDoc);
                 if (!op) { return; }
                 attempt(HTMLPatcher.applyOp)(docText, op, doc.body, rangy, ifr.contentWindow);
             };
