@@ -531,10 +531,8 @@ define([
 
                 //attempt(fixChrome)(docText, doc, ifr.contentWindow);
                 //docText = attempt(fixSafari)(docText);
-try {
                 docText = fixChrome(docText, doc, ifr.contentWindow);
                 docText = fixSafari(docText);
-} catch (e) { console.log(e.stack); }
 
                 if (oldDocText === docText) { return; }
 
@@ -564,7 +562,8 @@ try {
                 var rtDoc = realtime.getUserDoc();
                 var op = attempt(makeHTMLOperation)(docText, rtDoc);
                 if (!op) { return; }
-                attempt(HTMLPatcher.applyOp)(docText, op, doc.body, rangy, ifr.contentWindow);
+                attempt(HTMLPatcher.applyOp)(
+                    docText, op, doc.body, rangy, ifr.contentWindow, reportError);
             };
 
             realtime.onUserListChange(function (userList) {

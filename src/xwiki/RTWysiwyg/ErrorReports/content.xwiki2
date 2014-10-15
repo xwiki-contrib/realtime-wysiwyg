@@ -1,0 +1,10 @@
+{{velocity}}
+## -*- Mode: Velocity
+#if("$!request.get('error')" != "")
+  #set($obj = $doc.newObject($doc.getFullName()))
+  $obj.set('content', $request.get('error'))
+  $doc.saveAsAuthor("added an error report from $xcontext.getUser()")
+#else
+  
+#end
+{{/velocity}}

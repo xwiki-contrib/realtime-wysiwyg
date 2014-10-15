@@ -143,20 +143,6 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         return { node: dom, pos: offset };
     };
 
-    var nodeId = function (node) {
-        var nn = node.nodeName;
-        if (nn === '#text') { return encodeURI(node.textContent); }
-        return ' ' + nn;
-    }
-
-    var getChildPath = function (parent) {
-        var out = [];
-        for (var next = parent; next; next = getNextSiblingDeep(next, parent)) {
-            out.push(nodeId(next));
-        }
-        return out;
-    };
-
     var relocatedPositionInNode = function (newNode, oldNode, offset)
     {
         if (newNode.nodeName !== '#text' || oldNode.nodeName !== '#text' || offset === 0) {
@@ -180,6 +166,22 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         return { node: newNode, pos: offset };
     };
 
+    var pushNode = function (list, node) {
+        if (node.nodeName === '#text') {
+            list.push.apply(list, node.data.split(''));
+        } else {
+            list.push('#' + node.nodeName);
+        }
+    };
+
+    var getChildPath = function (parent) {
+        var out = [];
+        for (var next = parent; next; next = getNextSiblingDeep(next, parent)) {
+            pushNode(out, next);
+        }
+        return out;
+    };
+
     var tryFromBeginning = function (oldPath, newPath) {
         for (var i = 0; i < oldPath.length; i++) {
             if (oldPath[i] !== newPath[i]) { return i; }
@@ -190,12 +192,10 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
     var tryFromEnd = function (oldPath, newPath) {
         for (var i = 1; i <= oldPath.length; i++) {
             if (oldPath[oldPath.length - i] !== newPath[newPath.length - i]) {
-                //return newPath.length - i;
                 return false;
             }
         }
         return true;
-        //return newPath.length - oldPath.length - 1;
     };
 
     /**
@@ -207,7 +207,7 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         var before = [];
         var next = parent;
         for (; next && next !== node; next = getNextSiblingDeep(next, parent)) {
-            before.push(nodeId(next));
+            pushNode(before, next);
         }
 
         if (next !== node) { throw new Error(); }
@@ -215,13 +215,25 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         var after = [];
         next = getNextSiblingDeep(next, parent);
         for (; next; next = getNextSiblingDeep(next, parent)) {
-            after.push(nodeId(next));
+            pushNode(after, next);
         }
 
         return { before: before, after: after };
     };
 
-    var getRelocatedPosition = function (newParent, oldParent, oldNode, oldOffset)
+    var nodeAtIndex = function (parent, idx) {
+        var node = parent;
+        for (var i = 0; i < idx; i++) {
+            if (node.nodeName === '#text') {
+                if (i + node.data.length > idx) { return node; }
+                i += node.data.length - 1;
+            }
+            node = getNextSiblingDeep(node);
+        }
+        return node;
+    };
+
+    var getRelocatedPosition = function (newParent, oldParent, oldNode, oldOffset, origText, op)
     {
         var newPath = getChildPath(newParent);
         if (newPath.length === 1) {
@@ -237,19 +249,19 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
             idx = (newPath.length - oldPaths.after.length - 1);
         } else {
             idx = fromBeginning;
+            var id = 'relocate-' + String(Math.random()).substring(2);
+            $(document.body).append('<textarea id="'+id+'"></textarea>');
+            $('#'+id).val(JSON.stringify([origText, op, newPath, getChildPath(oldParent), oldPaths]));
         }
 
-        var out = newParent;
-        for (var i = 0; i < idx; i++) {
-            out = getNextSiblingDeep(out);
-        }
+        var out = nodeAtIndex(newParent, idx);
         return relocatedPositionInNode(out, oldNode, oldOffset);
     };
 
     // We can't create a real range until the new parent is installed in the document
     // but we need the old range to be in the document so we can do comparisons
     // so create a "pseudo" range instead.
-    var getRelocatedPseudoRange = function (newParent, oldParent, range)
+    var getRelocatedPseudoRange = function (newParent, oldParent, range, origText, op)
     {
         if (!range.startContainer) {
             throw new Error();
@@ -262,7 +274,8 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         var endContainer = range.endContainer;
         var endOffset = range.endOffset;
 
-        var newStart = getRelocatedPosition(newParent, oldParent, startContainer, startOffset);
+        var newStart =
+            getRelocatedPosition(newParent, oldParent, startContainer, startOffset, origText, op);
 
         if (!newStart.node) {
             // there is probably nothing left of the document so just clear the selection.
@@ -272,7 +285,7 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
         var newEnd = { node: newStart.node, pos: newStart.pos };
         if (endContainer) {
             if (endContainer !== startContainer) {
-                newEnd = getRelocatedPosition(newParent, oldParent, endContainer, endOffset);
+                newEnd = getRelocatedPosition(newParent, oldParent, endContainer, endOffset, origText, op);
             } else if (endOffset !== startOffset) {
                 newEnd = {
                     node: newStart.node,
@@ -421,7 +434,7 @@ define(['jquery', 'RTWysiwyg_WebHome_otaml'], function ($) {
             return;
         }
 
-        var pseudoRange = getRelocatedPseudoRange(babysitter, dom, range, rangy);
+        var pseudoRange = getRelocatedPseudoRange(babysitter, dom, range, docText, op);
         range.detach();
         replaceAllChildren(dom, babysitter);
         if (pseudoRange.start.node) {
