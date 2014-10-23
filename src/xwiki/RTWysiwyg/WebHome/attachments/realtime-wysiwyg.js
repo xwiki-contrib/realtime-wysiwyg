@@ -562,8 +562,7 @@ define([
                 var rtDoc = realtime.getUserDoc();
                 var op = attempt(makeHTMLOperation)(docText, rtDoc);
                 if (!op) { return; }
-                attempt(HTMLPatcher.applyOp)(
-                    docText, op, doc.body, rangy, ifr.contentWindow, reportError);
+                attempt(HTMLPatcher.applyOp)(docText, op, doc.body, rangy, ifr.contentWindow);
             };
 
             realtime.onUserListChange(function (userList) {
