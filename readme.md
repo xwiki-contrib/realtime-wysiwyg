@@ -1,6 +1,6 @@
 # Realtime WYSIWYG Editor Binding
 
-[![XWiki labs logo](https://raw.githubusercontent.com/xwiki-labs/xwiki-labs-logo/master/projects/xwikilabs/xlabs-project.png "XWiki labs")](https://labs.xwiki.com/xwiki/bin/view/Main/WebHome)
+[![XWiki labs logo](https://raw.githubusercontent.com/xwiki-labs/xwiki-labs-logo/master/projects/xwikilabs/xwikilabsprototype.png "XWiki labs")](https://labs.xwiki.com/xwiki/bin/view/Projects/XWikiLabsPrototype)
 
 This binding makes use of the [chainpad][chainpad] realtime editor engine and binds
 to the [XWiki WYSIWYG][wysiwyg] editor. It is currently a work-in-progress but to try it out,
