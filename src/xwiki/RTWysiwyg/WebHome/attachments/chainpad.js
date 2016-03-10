@@ -372,7 +372,7 @@ var random = Patch.random = function (doc, opCount) {
 var PARANOIA = module.exports.PARANOIA = false;
 
 /* throw errors over non-compliant messages which would otherwise be treated as invalid */
-var TESTING = module.exports.TESTING = true;
+var TESTING = module.exports.TESTING = false;
 
 var assert = module.exports.assert = function (expr) {
     if (!expr) { throw new Error("Failed assertion"); }
@@ -547,7 +547,7 @@ var hashOf = Message.hashOf = function (msg) {
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 var Common = require('./Common');
-var Operation = require('./Operation');
+var Operation = module.exports.Operation = require('./Operation');
 var Patch = require('./Patch');
 var Message = require('./Message');
 var Sha = require('./SHA256');
@@ -589,6 +589,18 @@ var unschedule = function (realtime, schedule) {
     clearTimeout(schedule);
 };
 
+var onMessage = function (realtime, message, callback) {
+    if (!realtime.messageHandlers.length) {
+        callback("no onMessage() handler registered");
+    }
+    for (var i = 0; i < realtime.messageHandlers.length; i++) {
+        realtime.messageHandlers[i](message, function () {
+            callback.apply(null, arguments);
+            callback = function () { };
+        });
+    }
+};
+
 var sync = function (realtime) {
     if (Common.PARANOIA) { check(realtime); }
     if (realtime.syncSchedule) {
@@ -622,7 +634,7 @@ var sync = function (realtime) {
 
     var strMsg = Message.toString(msg);
 
-    realtime.onMessage(strMsg, function (err) {
+    onMessage(realtime, strMsg, function (err) {
         if (err) {
             debug(realtime, "Posting to server failed [" + err + "]");
         }
@@ -649,7 +661,6 @@ var sync = function (realtime) {
 };
 
 var getMessages = function (realtime) {
-    if (realtime.registered === true) { return; }
     realtime.registered = true;
     /*var to = schedule(realtime, function () {
         throw new Error("failed to connect to the server");
@@ -658,7 +669,7 @@ var getMessages = function (realtime) {
                              realtime.authToken,
                              realtime.channelId,
                              Message.REGISTER);
-    realtime.onMessage(Message.toString(msg), function (err) {
+    onMessage(realtime, Message.toString(msg), function (err) {
         if (err) { throw err; }
     });
 };
@@ -671,7 +682,7 @@ var sendPing = function (realtime) {
                              realtime.channelId,
                              Message.PING,
                              realtime.lastPingTime);
-    realtime.onMessage(Message.toString(msg), function (err) {
+    onMessage(realtime, Message.toString(msg), function (err) {
         if (err) { throw err; }
     });
 };
@@ -707,9 +718,7 @@ var create = ChainPad.create = function (userName, authToken, channelId, initial
         patchHandlers: [],
         opHandlers: [],
 
-        onMessage: function (message, callback) {
-            callback("no onMessage() handler registered");
-        },
+        messageHandlers: [],
 
         schedules: [],
 
@@ -933,6 +942,11 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
     }
 
     if (msg.messageType === Message.DISCONNECT) {
+        if (msg.userName === '') {
+            realtime.userList = [];
+            userListChange(realtime);
+            return;
+        }
         var idx = realtime.userList.indexOf(msg.userName);
         if (Common.PARANOIA) { Common.assert(idx > -1); }
         if (idx > -1) {
@@ -1079,18 +1093,67 @@ var handleMessage = ChainPad.handleMessage = function (realtime, msgStr) {
         Common.assert(newUserInterfaceContent === realtime.userInterfaceContent);
     }
 
-    // push the uncommittedPatch out to the user interface.
-    for (var i = 0; i < realtime.patchHandlers.length; i++) {
-        realtime.patchHandlers[i](uncommittedPatch);
-    }
-    if (realtime.opHandlers.length) {
-        for (var i = uncommittedPatch.operations.length-1; i >= 0; i--) {
-            for (var j = 0; j < realtime.opHandlers.length; j++) {
-                realtime.opHandlers[j](uncommittedPatch.operations[i]);
+    if (uncommittedPatch.operations.length) {
+        // push the uncommittedPatch out to the user interface.
+        for (var i = 0; i < realtime.patchHandlers.length; i++) {
+            realtime.patchHandlers[i](uncommittedPatch);
+        }
+        if (realtime.opHandlers.length) {
+            for (var i = uncommittedPatch.operations.length-1; i >= 0; i--) {
+                for (var j = 0; j < realtime.opHandlers.length; j++) {
+                    realtime.opHandlers[j](uncommittedPatch.operations[i]);
+                }
             }
         }
     }
     if (Common.PARANOIA) { check(realtime); }
+};
+
+var wasEverState = function (content, realtime) {
+    Common.assert(typeof(content) === 'string');
+    // without this we would never get true on the ^HEAD
+    if (realtime.authDoc === content) {
+        return true;
+    }
+
+    var hash = Sha.hex_sha256(content);
+
+    var patchMsg = realtime.best;
+    do {
+        if (patchMsg.content.parentHash === hash) { return true; }
+    } while ((patchMsg = getParent(realtime, patchMsg)));
+    return false;
+};
+
+var getDepthOfState = function (content, minDepth, realtime) {
+    Common.assert(typeof(content) === 'string');
+
+    // minimum depth is an optional argument which defaults to zero
+    var minDepth = minDepth || 0;
+
+    if (minDepth === 0 && realtime.authDoc === content) {
+        return 0;
+    }
+
+    var hash = Sha.hex_sha256(content);
+
+    var patchMsg = realtime.best;
+    var depth = 0;
+
+    do {
+        if (depth < minDepth) {
+            // you haven't exceeded the minimum depth
+        } else {
+            //console.log("Exceeded minimum depth");
+            // you *have* exceeded the minimum depth
+            if (patchMsg.content.parentHash === hash) {
+                // you found it!
+                return depth + 1;
+            }
+        }
+        depth++;
+    } while ((patchMsg = getParent(realtime, patchMsg)));
+    return;
 };
 
 module.exports.create = function (userName, authToken, channelId, initialState, conf) {
@@ -1123,13 +1186,15 @@ module.exports.create = function (userName, authToken, channelId, initialState, 
             doOperation(realtime, Operation.create(offset, 0, str));
         }),
         onMessage: enterChainPad(realtime, function (handler) {
-            realtime.onMessage = handler;
+            Common.assert(typeof(handler) === 'function');
+            realtime.messageHandlers.push(handler);
         }),
         message: enterChainPad(realtime, function (message) {
             handleMessage(realtime, message);
         }),
         start: enterChainPad(realtime, function () {
             getMessages(realtime);
+            if (realtime.syncSchedule) { unschedule(realtime, realtime.syncSchedule); }
             realtime.syncSchedule = schedule(realtime, function () { sync(realtime); });
         }),
         abort: enterChainPad(realtime, function () {
@@ -1149,6 +1214,12 @@ module.exports.create = function (userName, authToken, channelId, initialState, 
                 return { waiting:1, lag: (new Date()).getTime() - realtime.lastPingTime };
             }
             return { waiting:0, lag: realtime.lastPingLag };
+        },
+        wasEverState: function (content) {
+            return wasEverState(content, realtime);
+        },
+        getDepthOfState: function (content, minDepth) {
+            return getDepthOfState(content, minDepth, realtime);
         }
     };
 };
@@ -1211,7 +1282,7 @@ var clone = Operation.clone = function (op) {
 
 /**
  * @param op the operation to apply.
- * @param doc the content to apply the operation on 
+ * @param doc the content to apply the operation on
  */
 var apply = Operation.apply = function (op, doc)
 {
