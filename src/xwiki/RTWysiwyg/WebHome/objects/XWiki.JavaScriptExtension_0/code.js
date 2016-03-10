@@ -21,9 +21,25 @@
     var PATHS = {
         RTWysiwyg_WebHome_chainpad: "$doc.getAttachmentURL('chainpad.js')",
         RTWysiwyg_WebHome_realtime_wysiwyg: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
-        RTWysiwyg_WebHome_html_patcher: "$doc.getAttachmentURL('html-patcher.js')",
-        RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy.js')",
-        RTWysiwyg_WebHome_otaml: "$doc.getAttachmentURL('otaml.js')",
+        RTWysiwyg_WebHome_realtime_cleartext: "$doc.getAttachmentURL('realtime-cleartext.js')",
+
+        // RTWysiwyg_WebHome_convert: "$doc.getAttachmentURL('convert.js')",
+        RTWysiwyg_WebHome_toolbar: "$doc.getAttachmentURL('toolbar.js')",
+        RTWysiwyg_WebHome_cursor: "$doc.getAttachmentURL('cursor.js')",
+        RTWysiwyg_WebHome_json_ot: "$doc.getAttachmentURL('json-ot.js')",
+
+        RTWysiwyg_WebHome_hyperjson: "$doc.getAttachmentURL('hyperjson.js')",
+        RTWysiwyg_WebHome_hyperscript: "$doc.getAttachmentURL('hyperscript.js')",
+
+        RTWysiwyg_WebHome_treesome: "$doc.getAttachmentURL('treesome.js')",
+        RTWysiwyg_WebHome_sharejs_textarea: "$doc.getAttachmentURL('sharejs_textarea.js')",
+
+        RTWysiwyg_WebHome_diffDOM: "$doc.getAttachmentURL('diffDOM.js')",
+
+        RTWysiwyg_WebHome_messages: "$doc.getAttachmentURL('messages.js')",
+        RTWysiwyg_WebHome_reconnecting_websocket: "$doc.getAttachmentURL('reconnecting-websocket.js')",
+
+        RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy-core.min.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
     };
     // END_VELOCITY
@@ -39,6 +55,19 @@
 
     // Not in edit mode?
     if (!DEMO_MODE && window.XWiki.contextaction !== 'edit') { return; }
+
+
+    // TODO more reliably test if we're using CKEditor
+    // XWiki.editor might be 'inline', which is probably no good.
+    var usingCK = function () {
+        var editor = window.XWiki.editor;
+        if (editor === 'inline') { return true; }
+    };
+
+    if (!usingCK()) {
+        console.log("Not using CKEditor. Aborting RTWysiwyg code");
+        return;
+    }
 
     // Username === <USER>-encoded(<PRETTY_USER>)%2d<random number>
     var userName = USER + '-' + encodeURIComponent(PRETTY_USER + '-').replace(/-/g, '%2d') +
@@ -60,7 +89,14 @@
             'rtwysiwyg'
         ]);
 
-        RTWysiwyg.main(WEBSOCKET_URL, userName, MESSAGES, channel, DEMO_MODE, language);
+        // FIXME don't invoke main unless it exists
+        // watch out, this gets minified, so you're going to break if the API doesn't match
+
+        if (RTWysiwyg && RTWysiwyg.main) {
+            RTWysiwyg.main(WEBSOCKET_URL, userName, MESSAGES, channel, DEMO_MODE, language);
+        } else {
+            console.error("Couldn't find RTWysiwyg.main, aborting");
+        }
 
     });
 
