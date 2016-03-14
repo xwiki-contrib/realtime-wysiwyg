@@ -28,7 +28,70 @@ define([
     var $ = window.$ = window.jQuery;
     var DiffDom = window.diffDOM;
 
-    var main = function (WebsocketURL, userName, MESSAGES, channel, DEMO_MODE, language) {
+    /** Key in the localStore which indicates realtime activity should be disallowed. */
+    var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
+
+    var module = {};
+
+    var uid = function () {
+        return 'rtwiki-uid-' + String(Math.random()).substring(2);
+    };
+
+    var runningRealtime = false;
+
+    var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
+        var realtimeAllowed = window.realtimeAllowed = function (bool) {
+            if (typeof bool === 'undefined') {
+                var disallow = localStorage.getItem(LOCALSTORAGE_DISALLOW);
+                if (disallow) {
+                    return false;
+                } else {
+                    return true;
+                }
+            } else {
+                localStorage.setItem(LOCALSTORAGE_DISALLOW, bool? '' : 1);
+                return bool;
+            }
+        };
+
+        var allowRealtimeCbId = uid();
+
+        var checked = (realtimeAllowed()? 'checked' : '');
+
+        var disallowButtonHTML = ('<div class="rtwiki-allow-outerdiv">' +
+            '<label class="rtwiki-allow-label" for="' + allowRealtimeCbId + '">' +
+                '<input type="checkbox" class="rtwiki-allow" id="' + allowRealtimeCbId + '" '+
+                    checked + ' />' + ' ' + Messages.allowRealtime + 
+            '</label>' +
+        '</div>');
+
+        var $editButtons = $('.buttons');
+
+        console.log("Creating realtime toggle");
+        $editButtons.append(disallowButtonHTML);
+
+        var $disallowButton = window.$disallowButton = $('#' + allowRealtimeCbId);
+
+        var disallowClick = function () {
+            var checked = $disallowButton[0].checked;
+            console.log("Value of 'allow realtime collaboration' is %s", checked);
+            if (checked || DEMO_MODE) {
+                realtimeAllowed(true);
+
+                window.location.reload();
+            } else {
+                realtimeAllowed(false);
+                module.abortRealtime();
+            }
+        };
+
+        $disallowButton.on('change', disallowClick);
+
+        if (!realtimeAllowed()) {
+            console.log("Realtime is disallowed. Quitting");
+            return;
+        }
+
         var whenReady = function (editor, iframe) {
             var inner = iframe.contentWindow.body;
             var $textarea = $('<textarea>');
@@ -97,16 +160,21 @@ define([
 
             var onRemote = config.onRemote = function (info) {
                 if (initializing) { return; }
-                //console.log("Remote changes!");
                 cursor.update();
                 applyHjson(info.realtime.getUserDoc());
             };
 
-            var onAbort = config.onAbort = function (info) { };
+            var onAbort = config.onAbort = function (info) {
+                var realtime = info.socket.realtime;
+                realtime.toolbar.failed();
+                toolbar.destroy();
+            };
+
             var onReady = config.onReady = function (info) {
                 console.log("Realtime is ready!");
                 initializing = false;
                 setEditable(true);
+                applyHjson(info.realtime.getUserDoc());
             };
 
             var onUserListChange = config.onUserListChange = function (info) {
@@ -124,6 +192,9 @@ define([
             };
 
             var realtime = window.realtime = Realtime.start(config);
+            module.abortRealtime = function () {
+                realtime.abort();
+            };
 
             editor.on('change', function () {
                 var hjson = Hyperjson.fromDOM(inner);
@@ -149,5 +220,5 @@ define([
         untilThen();
     };
 
-    return {main: main};
+    return module;
 });
