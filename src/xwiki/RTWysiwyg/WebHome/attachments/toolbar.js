@@ -24,6 +24,10 @@ define([
         return 'rtwysiwyg-uid-' + String(Math.random()).substring(2);
     };
 
+    var destroy = function ($container) {
+
+    };
+
     var createRealtimeToolbar = function ($container) {
         var id = uid();
         $container.prepend(
@@ -58,12 +62,6 @@ define([
             '    line-height: 25px;',
             '    height: 22px;',
             '}',
-            '.' + TOOLBAR_CLS + ' div.rtwysiwyg-back {',
-            '    padding: 0;',
-            '    font-weight: bold;',
-            '    cursor: pointer;',
-            '    color: #000;',
-            '}',
             '.rtwysiwyg-toolbar-leftside div {',
             '    float: left;',
             '}',
@@ -89,16 +87,6 @@ define([
             '</style>'
          ].join('\n'));
         return toolbar;
-    };
-
-    var createEscape = function ($container) {
-        var id = uid();
-        $container.append('<div class="rtwysiwyg-back" id="' + id + '">&#8656; Back</div>');
-        var $ret = $container.find('#'+id);
-        $ret.on('click', function () {
-            window.location.href = '/';
-        });
-        return $ret[0];
     };
 
     var createSpinner = function ($container) {
@@ -184,7 +172,6 @@ define([
 
     var create = function ($container, myUserName, realtime) {
         var toolbar = createRealtimeToolbar($container);
-        createEscape(toolbar.find('.rtwysiwyg-toolbar-leftside'));
         var userListElement = createUserList(toolbar.find('.rtwysiwyg-toolbar-leftside'));
         var spinner = createSpinner(toolbar.find('.rtwysiwyg-toolbar-rightside'));
         var lagElement = createLagElement(toolbar.find('.rtwysiwyg-toolbar-rightside'));
@@ -225,6 +212,9 @@ define([
             },
             connected: function () {
                 connected = true;
+            },
+            destroy: function () {
+                toolbar.remove();
             }
         };
     };
