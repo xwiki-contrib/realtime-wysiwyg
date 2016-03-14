@@ -143,6 +143,8 @@ define([
     };
     /* end websocket stuff */
 
+    //var 
+
     var start = module.exports.start = function (config) {
         var textarea = config.textarea;
         var websocketUrl = config.websocketURL;
@@ -172,6 +174,8 @@ define([
 
         var bump = function () {};
 
+        var toReturn = {};
+
         socket.onOpen.push(function (evt) {
             if (!initializing) {
                 debug("Starting");
@@ -181,7 +185,7 @@ define([
                 return;
             }
 
-            var realtime = socket.realtime = ChainPad.create(userName,
+            var realtime = socket.realtime = toReturn.realtime = ChainPad.create(userName,
                                 passwd,
                                 channel,
                                 $(textarea).val(),
@@ -196,7 +200,7 @@ define([
                 });
             }
 
-            onEvent = function () {
+            onEvent = toReturn.onEvent = function () {
                 // This looks broken
                 if (isErrorState || initializing) { return; }
             };
@@ -220,7 +224,8 @@ define([
                 if (config.onReady) {
                     // extend as you wish
                     config.onReady({
-                        userList: userList
+                        userList: userList,
+                        realtime: realtime
                     });
                 }
             });
@@ -320,14 +325,19 @@ define([
             realtime.start();
             debug('started');
 
-            bump = realtime.bumpSharejs;
+            bump = toReturn.bumpSharejs = realtime.bumpSharejs;
+
+            toReturn.abort = function () {
+                abort(socket, realtime);
+                if (config.onAbort) {
+                    config.onAbort({
+                        socket: socket
+                    });
+                }
+            };
         });
-        return {
-            onEvent: function () {
-                onEvent();
-            },
-            bumpSharejs: function () { bump(); }
-        };
+
+        return toReturn;
     };
     return module.exports;
 });
