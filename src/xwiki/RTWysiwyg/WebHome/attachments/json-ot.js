@@ -1,4 +1,6 @@
-define(function () {
+define([
+    'RTWysiwyg_WebHome_chainpad'
+], function () {
     var ChainPad = window.ChainPad;
     var JsonOT = {};
 
