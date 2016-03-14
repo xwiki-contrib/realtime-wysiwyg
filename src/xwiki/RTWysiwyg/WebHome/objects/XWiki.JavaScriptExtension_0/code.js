@@ -5,6 +5,7 @@
     var PRETTY_USER = "$xwiki.getUserName($xcontext.getUser(), false)";
     var DEMO_MODE = "$!request.getParameter('demoMode')" || false;
     var DEFAULT_LANGUAGE = "$xwiki.getXWikiPreference('default_language')";
+    var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
     var MESSAGES = {
         allowRealtime: "Allow Realtime Collaboration", // TODO: translate
         joinSession: "Join Realtime Collaborative Session",
@@ -61,7 +62,13 @@
     // XWiki.editor might be 'inline', which is probably no good.
     var usingCK = function () {
         var editor = window.XWiki.editor;
-        if (editor === 'inline') { return true; }
+        if (document.querySelectorAll('link[href*="CKEditor"],'+
+            ' script[src*="CKEditor"]').length) {
+            console.log("CKEditor detected, loading realtime WYSIWYG code...");
+            return true;
+        }
+        //href='/xwiki/bin/ssx/CKEditor/EditSheet?language=en'
+        //if (editor === 'inline') { return true; }
     };
 
     if (!usingCK()) {
@@ -69,14 +76,44 @@
         return;
     }
 
+    //var hasDisallowed 
+
+    var hasActiveRealtimeSession = function () {
+        console.log("Checking if there is an active realtime session");
+
+        var force = document.querySelectorAll('a[href*="force=1"][href*="/edit/"]');
+        var href, link;
+        if (force.length /*&& !LOCALSTORAGE_DISALLOW*/  ) {
+            link = force[0];
+
+            link.textContent = MESSAGES.joinSession;
+            href = link.getAttribute('href');
+
+            href = href.replace(/editor=(wiki|inline)[\&]?/, '') +
+                    'editor=inline&sheet=CKEditor.EditSheet&force=1';
+
+            link.setAttribute('href', href);
+            console.log("Corrected link to: %s", href);
+            return true;
+        }
+        return false;
+    };
+
+    if (hasActiveRealtimeSession()) {
+        console.log("realtime session found");
+        return;
+    } else {
+        console.log("No active realtime session found");
+    }
+
     // Username === <USER>-encoded(<PRETTY_USER>)%2d<random number>
     var userName = USER + '-' + encodeURIComponent(PRETTY_USER + '-').replace(/-/g, '%2d') +
         String(Math.random()).substring(2);
 
+    // nested requires...
     require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
-
-        // GWT is catching all of the errors.
-        window.onerror = null;
+/*      // GWT is catching all of the errors.
+        window.onerror = null; */
 
         var language = $('form#edit input[name="language"]').attr('value');
         if (language === '' || language === 'default') { language = DEFAULT_LANGUAGE; }
@@ -97,7 +134,5 @@
         } else {
             console.error("Couldn't find RTWysiwyg.main, aborting");
         }
-
     });
-
 }());
