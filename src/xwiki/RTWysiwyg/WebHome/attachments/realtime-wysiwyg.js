@@ -150,8 +150,14 @@ define([
                 }
             };
 
-            var applyHjson = function (shjson) {
-                var userDocStateDom = Hyperjson.callOn(JSON.parse(shjson), Hyperscript);
+            var applyHjson = function (parsed) {
+                if (typeof (parsed) !== 'object') {
+                    // we won't be able to patch it in...
+                    console.log("[applyHjson] supplied argument was not valid hyperjson");
+                    return;
+                }
+
+                var userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
                 userDocStateDom.setAttribute("contenteditable", true);
                 var DD = new DiffDom(diffOptions);
                 var patch = DD.diff(inner, userDocStateDom);
@@ -161,7 +167,8 @@ define([
             var onRemote = config.onRemote = function (info) {
                 if (initializing) { return; }
                 cursor.update();
-                applyHjson(info.realtime.getUserDoc());
+                var parsed = JSON.parse(info.realtime.getUserDoc());
+                applyHjson(parsed);
             };
 
             var onAbort = config.onAbort = function (info) {
@@ -174,7 +181,28 @@ define([
                 console.log("Realtime is ready!");
                 initializing = false;
                 setEditable(true);
-                applyHjson(info.realtime.getUserDoc());
+
+                var parsed;
+                try {
+                    parsed = JSON.parse(info.realtime.getUserDoc());
+                } catch (err) {
+                    // probably not an error that matters.
+                    //console.error(err);
+
+                    //$textarea.val(module.realtime.realtime.getUserDoc());
+                    console.log("Readying new document");
+                    onRemote(info);
+
+                    // not valid json, it's probably a new document
+                    if (module.updateTransport) {
+                        // FIXME this is a really unfortunate name.
+                        //module.updateTransport();
+                    }
+
+                    return;
+                }
+
+                applyHjson(parsed);
             };
 
             var onUserListChange = config.onUserListChange = function (info) {
@@ -182,6 +210,10 @@ define([
                     console.log("userlist change");
                     console.log("There are now %s users", info.userList.length);
                     console.log(info.userList);
+                    if (module.realtime) {
+                        // bump contents when new people join.
+                        module.realtime.bumpSharejs();
+                    }
                 }
             };
 
@@ -191,16 +223,18 @@ define([
                 /* handle disconnects somehow */
             };
 
-            var realtime = window.realtime = Realtime.start(config);
+            var realtime = window.realtime = module.realtime = Realtime.start(config);
             module.abortRealtime = function () {
                 realtime.abort();
             };
 
-            editor.on('change', function () {
+            var updateTransport = module.updateTransport = function () {
                 var hjson = Hyperjson.fromDOM(inner);
                 $textarea.val(JSON.stringify(hjson));
                 realtime.bumpSharejs();
-            });
+            };
+
+            editor.on('change', updateTransport);
         };
 
         var untilThen = function () {

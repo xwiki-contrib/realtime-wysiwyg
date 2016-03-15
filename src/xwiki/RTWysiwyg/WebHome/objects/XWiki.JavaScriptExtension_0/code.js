@@ -62,8 +62,9 @@
     // XWiki.editor might be 'inline', which is probably no good.
     var usingCK = function () {
         var editor = window.XWiki.editor;
-        if (document.querySelectorAll('link[href*="CKEditor"],'+
-            ' script[src*="CKEditor"]').length) {
+        // there are scripts for CKEditor which get loaded no matter what
+        // this stylesheet only exists if you're using CKEditor to edit
+        if (document.querySelectorAll('link[href*="CKEditor"]').length) {
             console.log("CKEditor detected, loading realtime WYSIWYG code...");
             return true;
         }
