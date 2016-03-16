@@ -25,7 +25,9 @@ define([
     'RTWysiwyg_WebHome_diffDOM',
     'jquery'
 ], function (ErrorBox, Realtime, /*Convert,*/Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom) {
-    var $ = window.$ = window.jQuery;
+    // be very careful, dumping jquery as '$' into the global scope will break
+    // prototype js bindings
+    var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
     /** Key in the localStore which indicates realtime activity should be disallowed. */
@@ -40,7 +42,7 @@ define([
     var runningRealtime = false;
 
     var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
-        var realtimeAllowed = window.realtimeAllowed = function (bool) {
+        var realtimeAllowed = function (bool) {
             if (typeof bool === 'undefined') {
                 var disallow = localStorage.getItem(LOCALSTORAGE_DISALLOW);
                 if (disallow) {
@@ -70,7 +72,7 @@ define([
         console.log("Creating realtime toggle");
         $editButtons.append(disallowButtonHTML);
 
-        var $disallowButton = window.$disallowButton = $('#' + allowRealtimeCbId);
+        var $disallowButton = $('#' + allowRealtimeCbId);
 
         var disallowClick = function () {
             var checked = $disallowButton[0].checked;
@@ -223,7 +225,7 @@ define([
                 /* handle disconnects somehow */
             };
 
-            var realtime = window.realtime = module.realtime = Realtime.start(config);
+            var realtime = module.realtime = Realtime.start(config);
             module.abortRealtime = function () {
                 realtime.abort();
             };
