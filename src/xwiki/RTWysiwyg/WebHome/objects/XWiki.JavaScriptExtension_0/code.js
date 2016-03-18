@@ -58,8 +58,11 @@
     if (!DEMO_MODE && window.XWiki.contextaction !== 'edit') { return; }
 
 
-    // TODO more reliably test if we're using CKEditor
-    // XWiki.editor might be 'inline', which is probably no good.
+    var getDocLock = function () {
+        var force = document.querySelectorAll('a[href*="force=1"][href*="/edit/"]');
+        return force.length? force[0] : false;
+    };
+
     var usingCK = function () {
         var editor = window.XWiki.editor;
         // there are scripts for CKEditor which get loaded no matter what
@@ -72,68 +75,101 @@
         //if (editor === 'inline') { return true; }
     };
 
-    if (!usingCK()) {
-        console.log("Not using CKEditor. Aborting RTWysiwyg code");
-        return;
-    }
+    var pointToRealtime = function (link) {
+        console.log("Presenting option to direct to CKEditor session: %s", href);
+        var href = link.getAttribute('href').replace(/editor=(wiki|inline)[\&]?/, '') +
+                'editor=inline&sheet=CKEditor.EditSheet&force=1';
 
-    //var hasDisallowed 
-
-    var hasActiveRealtimeSession = function () {
-        console.log("Checking if there is an active realtime session");
-
-        var force = document.querySelectorAll('a[href*="force=1"][href*="/edit/"]');
-        var href, link;
-        if (force.length /*&& !LOCALSTORAGE_DISALLOW*/  ) {
-            link = force[0];
-
-            link.textContent = MESSAGES.joinSession;
-            href = link.getAttribute('href');
-
-            href = href.replace(/editor=(wiki|inline)[\&]?/, '') +
-                    'editor=inline&sheet=CKEditor.EditSheet&force=1';
-
-            link.setAttribute('href', href);
-            console.log("Corrected link to: %s", href);
-            return true;
-        }
-        return false;
+        link.setAttribute('href', href);
+        link.innerText = MESSAGES.joinSession;
     };
 
-    if (hasActiveRealtimeSession()) {
-        console.log("realtime session found");
-        return;
+    var makeConfig = function () {
+        var languageSelector = document.querySelectorAll('form input[name="language"]');// [0].value;
+
+        var language = languageSelector[0] && languageSelector[0].value;
+
+        if (!language || language === 'default') { language = DEFAULT_LANGUAGE; }
+
+        // Username === <USER>-encoded(<PRETTY_USER>)%2d<random number>
+        var userName = USER + '-' + encodeURIComponent(PRETTY_USER + '-').replace(/-/g, '%2d') +
+            String(Math.random()).substring(2);
+
+        return {
+            websocketURL: WEBSOCKET_URL,
+            userName: userName,
+            language: language,
+            channel: JSON.stringify([
+                XWiki.currentWiki,
+                XWiki.currentSpace,
+                XWiki.currentPage,
+                language,
+                'rtwysiwyg'
+            ])
+        };
+    };
+
+    var checkSocket = function (config, callback) {
+        var socket = new WebSocket(config.websocketURL);
+        socket.onopen = function (evt) {
+            var regMsgEnd = '3:[0]';
+            socket.onmessage = function (evt) {
+                if (evt.data.indexOf(regMsgEnd) !== evt.data.length - regMsgEnd.length) {
+                    // not a register message (ignore it)
+                } else if (evt.data.indexOf(config.userName.length + ':' + config.userName) === 0) {
+                    // it's you registering
+                    socket.close();
+                    callback(false);
+                } else {
+                    socket.close();
+                    callback(true);
+                }
+            };
+            socket.send('1:x' +
+                config.userName.length + ':' + config.userName +
+                config.channel.length + ':' + config.channel +
+                '3:[0]');
+        };
+    };
+
+    var launchRealtime = function (config) {
+        require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
+            if (RTWysiwyg && RTWysiwyg.main) {
+                RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
+            } else {
+                console.error("Couldn't find RTWysiwyg.main, aborting");
+            }
+        });
+    };
+
+    var realtimeDisallowed = function () {
+        return localStorage.getItem(LOCALSTORAGE_DISALLOW)?  true: false;
+    };
+    var lock = getDocLock();
+
+    var config = makeConfig();
+    if (lock) {
+        // found a lock link
+
+        //console.log("Found a lock on the document!");
+        checkSocket(config, function (active) {
+            // determine if it's a realtime session
+            if (active) {
+                console.log("Found an active realtime");
+                //launchRealtime(config);
+                if (realtimeDisallowed()) {
+                    // do nothing
+                } else {
+                    pointToRealtime(lock);
+                }
+            } else {
+                console.log("Couldn't find an active realtime session");
+            }
+        });
+    } else if (usingCK()) {
+        // using CKEditor and realtime is allowed: start the realtime
+        launchRealtime(config);
     } else {
-        console.log("No active realtime session found");
+        // do nothing
     }
-
-    // Username === <USER>-encoded(<PRETTY_USER>)%2d<random number>
-    var userName = USER + '-' + encodeURIComponent(PRETTY_USER + '-').replace(/-/g, '%2d') +
-        String(Math.random()).substring(2);
-
-    // nested requires...
-    require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
-/*      // GWT is catching all of the errors.
-        window.onerror = null; */
-
-        var language = $('form#edit input[name="language"]').attr('value');
-        if (language === '' || language === 'default') { language = DEFAULT_LANGUAGE; }
-
-        var channel = JSON.stringify([
-            XWiki.currentWiki,
-            XWiki.currentSpace,
-            XWiki.currentPage,
-            language,
-            'rtwysiwyg'
-        ]);
-
-        // FIXME don't invoke main unless it exists
-        // watch out, this gets minified, so you're going to break if the API doesn't match
-
-        if (RTWysiwyg && RTWysiwyg.main) {
-            RTWysiwyg.main(WEBSOCKET_URL, userName, MESSAGES, channel, DEMO_MODE, language);
-        } else {
-            console.error("Couldn't find RTWysiwyg.main, aborting");
-        }
-    });
 }());
