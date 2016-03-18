@@ -196,10 +196,7 @@ define([
                     onRemote(info);
 
                     // not valid json, it's probably a new document
-                    if (module.updateTransport) {
-                        // FIXME this is a really unfortunate name.
-                        //module.updateTransport();
-                    }
+                    //if (module.updateTransport) { //module.updateTransport(); }
 
                     return;
                 }
