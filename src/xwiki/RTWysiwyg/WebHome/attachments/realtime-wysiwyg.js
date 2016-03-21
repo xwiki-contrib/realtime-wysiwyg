@@ -163,7 +163,6 @@ define([
                 try {
                     userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
                 } catch (err) {
-                    // TODO replace this with a call to errorbox
                     console.log('[applyHjson] err converting hyperjson to dom');
                     console.error(err);
                     ErrorBox.show("renderbug");
