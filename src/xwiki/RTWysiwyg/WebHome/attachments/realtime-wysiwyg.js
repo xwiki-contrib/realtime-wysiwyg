@@ -159,7 +159,16 @@ define([
                     return;
                 }
 
-                var userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
+                var userDocStateDom;
+                try {
+                    userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
+                } catch (err) {
+                    // TODO replace this with a call to errorbox
+                    console.log('[applyHjson] err converting hyperjson to dom');
+                    console.error(err);
+                    ErrorBox.show("renderbug");
+                    return;
+                }
                 userDocStateDom.setAttribute("contenteditable", true);
                 var DD = new DiffDom(diffOptions);
                 var patch = DD.diff(inner, userDocStateDom);
