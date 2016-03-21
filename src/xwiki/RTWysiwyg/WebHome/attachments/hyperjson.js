@@ -17,7 +17,7 @@ define([], function () {
 
     var callOnHyperJSON = function (hj, cb) {
         var children;
-        
+
         if (hj && hj[2]) {
             children = hj[2].map(function (child) {
                 if (isArray(child)) {
@@ -37,6 +37,14 @@ define([], function () {
         }
         // this should return the top level element of your new DOM
         return cb(hj[0], hj[1], children);
+    };
+
+    var prependDot = function (token) {
+        return '.' + token;
+    };
+
+    var isTruthy = function (x) {
+        return x;
     };
 
     var DOM2HyperJSON = function(el){
@@ -69,11 +77,21 @@ define([], function () {
         var sel = el.tagName;
 
         if(attributes.id){
+            // we don't have to do much to validate IDs because the browser
+            // will only permit one id to exist
+            // unless we come across a strange browser in the wild
           sel = sel +'#'+ attributes.id;
           delete attributes.id;
         }
         if(attributes.class){
-          sel = sel +'.'+ attributes.class.replace(/ /g,".");
+            // actually parse out classes so that we produce a valid selector
+            // string. leading or trailing spaces would have caused it to choke
+            // these are really common in generated html
+          sel = sel +'.'+ attributes.class
+            .split(/\s+/g)
+            .filter(isTruthy)
+            .map(prependDot)
+            .join('');
           delete attributes.class;
         }
         result.push(sel);
