@@ -42,4 +42,13 @@ The following is a full history of this realtime session:
 
 )))
 
+
+(% class="realtime-wysiwyg-renderbug" %)(((
+
+= Rendering Error =
+
+The realtime session produced a document that could not be rendered locally.
+
+)))
+
 )))
