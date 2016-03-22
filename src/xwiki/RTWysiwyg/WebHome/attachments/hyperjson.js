@@ -87,7 +87,7 @@ define([], function () {
             // actually parse out classes so that we produce a valid selector
             // string. leading or trailing spaces would have caused it to choke
             // these are really common in generated html
-          sel = sel +'.'+ attributes.class
+          sel = sel + attributes.class
             .split(/\s+/g)
             .filter(isTruthy)
             .map(prependDot)
