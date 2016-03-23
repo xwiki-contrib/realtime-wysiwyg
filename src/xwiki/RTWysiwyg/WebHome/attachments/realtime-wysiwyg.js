@@ -30,6 +30,13 @@ define([
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
+    window.REALTIME_DEBUG = {
+        local: {},
+        remote: {},
+        Hyperscript: Hyperscript,
+        Hyperjson: Hyperjson
+    };
+
     /** Key in the localStore which indicates realtime activity should be disallowed. */
     var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
 
@@ -177,7 +184,15 @@ define([
             var onRemote = config.onRemote = function (info) {
                 if (initializing) { return; }
                 cursor.update();
-                var parsed = JSON.parse(info.realtime.getUserDoc());
+
+                var userDoc = info.realtime.getUserDoc();
+
+                window.REALTIME_DEBUG.remote.userDoc = userDoc;
+
+                var parsed = JSON.parse(userDoc);
+
+                window.REALTIME_DEBUG.remote.hjson = parsed;
+
                 applyHjson(parsed);
             };
 
@@ -237,6 +252,8 @@ define([
 
             var updateTransport = module.updateTransport = function () {
                 var hjson = Hyperjson.fromDOM(inner);
+
+                window.REALTIME_DEBUG.local.hjson = hjson;
                 $textarea.val(JSON.stringify(hjson));
                 realtime.bumpSharejs();
             };
