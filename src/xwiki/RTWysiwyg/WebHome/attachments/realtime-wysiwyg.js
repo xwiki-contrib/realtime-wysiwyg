@@ -31,6 +31,7 @@ define([
     var DiffDom = window.diffDOM;
 
     window.REALTIME_DEBUG = {
+        version: 1.9,
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
@@ -102,8 +103,8 @@ define([
         }
 
         var whenReady = function (editor, iframe) {
-            var inner = iframe.contentWindow.body;
-            var $textarea = $('<textarea>');
+            var inner = window.REALTIME_DEBUG.inner = iframe.contentWindow.body;
+            var $textarea = window.REALTIME_DEBUG.textarea = $('<textarea>');
 
             var setEditable = function (bool) {
                 inner.setAttribute('contenteditable', bool);
@@ -185,13 +186,9 @@ define([
                 if (initializing) { return; }
                 cursor.update();
 
-                var userDoc = info.realtime.getUserDoc();
+                var userDoc = window.REALTIME_DEBUG.remote.userDoc = info.realtime.getUserDoc();
 
-                window.REALTIME_DEBUG.remote.userDoc = userDoc;
-
-                var parsed = JSON.parse(userDoc);
-
-                window.REALTIME_DEBUG.remote.hjson = parsed;
+                var parsed = window.REALTIME_DEBUG.remote.hjson = JSON.parse(userDoc);
 
                 applyHjson(parsed);
             };
@@ -214,13 +211,8 @@ define([
                     // probably not an error that matters.
                     //console.error(err);
 
-                    //$textarea.val(module.realtime.realtime.getUserDoc());
                     console.log("Readying new document");
                     onRemote(info);
-
-                    // not valid json, it's probably a new document
-                    //if (module.updateTransport) { //module.updateTransport(); }
-
                     return;
                 }
 
