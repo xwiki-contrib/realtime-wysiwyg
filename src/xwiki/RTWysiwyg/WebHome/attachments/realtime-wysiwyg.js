@@ -31,7 +31,7 @@ define([
     var DiffDom = window.diffDOM;
 
     window.REALTIME_DEBUG = {
-        version: 1.9,
+        version: '1.9',
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
