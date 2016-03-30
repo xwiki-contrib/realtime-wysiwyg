@@ -111,18 +111,37 @@ define([
         return $container.find('#'+id)[0];
     };
 
+    var getOtherUsers = function(myUserName, userList) {
+      var i = 0;
+      var list = '';
+      userList.forEach(function(user) {
+        var dashIndex = user.indexOf('-');
+        var length = user.indexOf('%2d')-dashIndex-1;
+        var userName = user.substr(dashIndex+1, length) || null;
+        if(userName !== myUserName) {
+          if(userName) {
+            if(i === 0) list = ' : ';
+            list += userName + ', ';
+            i++;
+          }
+        }
+      });
+      return (i > 0) ? list.slice(0, -2) : list;
+    };
+
     var updateUserList = function (myUserName, listElement, userList) {
         var meIdx = userList.indexOf(myUserName);
         if (meIdx === -1) {
             listElement.textContent = Messages.synchronizing;
             return;
         }
+        var userNamesList = getOtherUsers(myUserName, userList);
         if (userList.length === 1) {
             listElement.textContent = Messages.editingAlone;
         } else if (userList.length === 2) {
-            listElement.textContent = Messages.editingWithOneOtherPerson;
+            listElement.textContent = Messages.editingWithOneOtherPerson + userNamesList;
         } else {
-            listElement.textContent = Messages.editingWith + ' ' + (userList.length - 1) + ' ' + Messages.otherPeople;
+            listElement.textContent = Messages.editingWith + ' ' + (userList.length - 1) + ' ' + Messages.otherPeople + userNamesList;
         }
     };
 
