@@ -115,10 +115,10 @@ define([
       var i = 0;
       var list = '';
       userList.forEach(function(user) {
-        var dashIndex = user.indexOf('-');
-        var length = user.indexOf('%2d')-dashIndex-1;
-        var userName = user.substr(dashIndex+1, length) || null;
-        if(userName !== myUserName) {
+        if(user !== myUserName) {
+          var userName = user.replace(/^.*-([^-]*)%2d[0-9]*$/, function(all, one) {
+            return decodeURIComponent(one);
+          });
           if(userName) {
             if(i === 0) list = ' : ';
             list += userName + ', ';
