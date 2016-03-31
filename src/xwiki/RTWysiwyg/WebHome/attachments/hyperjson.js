@@ -39,12 +39,14 @@ define([], function () {
         return cb(hj[0], hj[1], children);
     };
 
-    var prependDot = function (token) {
-        return '.' + token;
+    var classify = function (token) {
+        return '.' + token.trim();
     };
 
-    var isTruthy = function (x) {
-        return x;
+    var isValidClass = function (x) {
+        if (x && /\S/.test(x)) {
+            return true;
+        }
     };
 
     var DOM2HyperJSON = function(el){
@@ -89,9 +91,10 @@ define([], function () {
             // these are really common in generated html
           sel = sel + attributes.class
             .split(/\s+/g)
-            .filter(isTruthy)
-            .map(prependDot)
-            .join('');
+            .filter(isValidClass)
+            .map(classify)
+            .join('')
+            .replace(/\.\./g, '.');
           delete attributes.class;
         }
         result.push(sel);
