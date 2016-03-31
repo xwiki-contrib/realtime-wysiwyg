@@ -43,7 +43,12 @@
         RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy-core.min.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
     };
+    #if("$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl" != "")
     var ISSUE_TRACKER_URL = "$doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
+    #else
+    #set($mainWIkiRef = $services.model.createDocumentReference($xcontext.getMainWikiName(), 'RTWysiwyg', 'WebHome'))
+    var ISSUE_TRACKER_URL = "$xwiki.getDocument($mainWIkiRef).getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
+    #end
     // END_VELOCITY
 
     //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
@@ -138,25 +143,25 @@
             if (RTWysiwyg && RTWysiwyg.main) {
                 RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
                 // Begin : Add the issue tracker icon
-                if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
-                    var untilThen = function () {
-                        var $iframe = $('iframe');
-                        if (window.CKEDITOR &&
-                            window.CKEDITOR.instances &&
-                            window.CKEDITOR.instances.content &&
-                            $iframe.length &&
-                            $iframe[0].contentWindow &&
-                            $iframe[0].contentWindow.body) {
-                            $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
-                            $('#cke_42').remove();
-                            return;
-                        }
-                        setTimeout(untilThen, 100);
-                    };
-                    /* wait for the existence of CKEDITOR before doing things...  */
-                    untilThen();
+              var untilThen = function () {
+                var $iframe = $('iframe');
+                if (window.CKEDITOR &&
+                    window.CKEDITOR.instances &&
+                    window.CKEDITOR.instances.content &&
+                    $iframe.length &&
+                    $iframe[0].contentWindow &&
+                    $iframe[0].contentWindow.body) {
+                    if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
+                      $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
+                    }
+                    $('#cke_42').remove();
+                    return;
                 }
-                // End issue tracker icon
+                setTimeout(untilThen, 100);
+              };
+              /* wait for the existence of CKEDITOR before doing things...  */
+              untilThen();
+              // End issue tracker icon
             } else {
                 console.error("Couldn't find RTWysiwyg.main, aborting");
             }
