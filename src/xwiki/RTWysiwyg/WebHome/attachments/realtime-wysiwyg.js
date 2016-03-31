@@ -30,8 +30,10 @@ define([
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
-    window.REALTIME_DEBUG = {
-        version: '1.9',
+    /* REALTIME_DEBUG exposes a 'version' attribute.
+        this must be updated with every release */
+    var REALTIME_DEBUG = window.REALTIME_DEBUG = {
+        version: '1.10',
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
@@ -47,6 +49,7 @@ define([
         return 'rtwiki-uid-' + String(Math.random()).substring(2);
     };
 
+    // TODO this doesn't seem to be used anywhere. We can probably remove it
     var runningRealtime = false;
 
     var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
@@ -103,9 +106,11 @@ define([
         }
 
         var whenReady = function (editor, iframe) {
-            var inner = window.REALTIME_DEBUG.inner = iframe.contentWindow.body;
-            var $textarea = window.REALTIME_DEBUG.textarea = $('<textarea>');
+            var inner = REALTIME_DEBUG.inner = iframe.contentWindow.body;
+            // TODO replace textarea with minimal transport layer
+            var $textarea = REALTIME_DEBUG.textarea = $('<textarea>');
 
+            // TODO add UI hints for when the contenteditable is disabled
             var setEditable = function (bool) {
                 inner.setAttribute('contenteditable', bool);
             };
@@ -124,6 +129,7 @@ define([
 
             var cursor = window.cursor = Cursor(inner);
 
+            // TODO don't wipe out the magicline plugin when receiving patches
             var diffOptions = {
                 preDiffApply: function (info) {
                     if (!cursor.exists()) { return; }
@@ -186,13 +192,14 @@ define([
                 if (initializing) { return; }
                 cursor.update();
 
-                var userDoc = window.REALTIME_DEBUG.remote.userDoc = info.realtime.getUserDoc();
+                var userDoc = REALTIME_DEBUG.remote.userDoc = info.realtime.getUserDoc();
 
-                var parsed = window.REALTIME_DEBUG.remote.hjson = JSON.parse(userDoc);
+                var parsed = REALTIME_DEBUG.remote.hjson = JSON.parse(userDoc);
 
                 applyHjson(parsed);
             };
 
+            // TODO ErrorBox, tell the user the session was aborted
             var onAbort = config.onAbort = function (info) {
                 var realtime = info.socket.realtime;
                 realtime.toolbar.failed();
@@ -242,10 +249,14 @@ define([
                 realtime.abort();
             };
 
+            /* TODO
+                don't send magicline elements over the wire
+                don't send type="_moz" over the wire
+            */
             var updateTransport = module.updateTransport = function () {
                 var hjson = Hyperjson.fromDOM(inner);
 
-                window.REALTIME_DEBUG.local.hjson = hjson;
+                REALTIME_DEBUG.local.hjson = hjson;
                 $textarea.val(JSON.stringify(hjson));
                 realtime.bumpSharejs();
             };
