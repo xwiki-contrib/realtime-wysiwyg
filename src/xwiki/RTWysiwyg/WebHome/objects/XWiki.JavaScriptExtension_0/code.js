@@ -43,7 +43,6 @@
         RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy-core.min.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
     };
-    var ISSUE_TRACKER_URL = "$doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
     // END_VELOCITY
 
     //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
@@ -137,35 +136,6 @@
         require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
             if (RTWysiwyg && RTWysiwyg.main) {
                 RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
-                // Begin : Add the issue tracker icon
-                if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
-                    var untilThen = function () {
-                        var $iframe = $('iframe');
-                        if (window.CKEDITOR &&
-                            window.CKEDITOR.instances &&
-                            window.CKEDITOR.instances.content &&
-                            $iframe.length &&
-                            $iframe[0].contentWindow &&
-                            $iframe[0].contentWindow.body) {
-                            $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
-                            $('#RTWysiwyg_issueTracker').on('click', function() {
-                                var win = window.open(ISSUE_TRACKER_URL, '_blank');
-                                if(win){
-                                    //Browser has allowed it to be opened
-                                    win.focus();
-                                }else{
-                                    //Broswer has blocked it
-                                    alert('You can report a bug here:\n' + ISSUE_TRACKER_URL);
-                                }
-                            });
-                            return;
-                        }
-                        setTimeout(untilThen, 100);
-                    };
-                    /* wait for the existence of CKEDITOR before doing things...  */
-                    untilThen();
-                }
-                // End issue tracker icon
             } else {
                 console.error("Couldn't find RTWysiwyg.main, aborting");
             }
