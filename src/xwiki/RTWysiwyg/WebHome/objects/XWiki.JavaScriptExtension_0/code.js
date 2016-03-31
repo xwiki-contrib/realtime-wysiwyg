@@ -148,6 +148,7 @@
                             $iframe[0].contentWindow &&
                             $iframe[0].contentWindow.body) {
                             $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
+                            $('#cke_42').remove();
                             return;
                         }
                         setTimeout(untilThen, 100);
