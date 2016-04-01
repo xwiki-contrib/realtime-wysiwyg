@@ -44,10 +44,10 @@
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
     };
     #if("$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl" != "")
-    var ISSUE_TRACKER_URL = "$doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
+    var ISSUE_TRACKER_URL = "$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
     #else
     #set($mainWIkiRef = $services.model.createDocumentReference($xcontext.getMainWikiName(), 'RTWysiwyg', 'WebHome'))
-    var ISSUE_TRACKER_URL = "$xwiki.getDocument($mainWIkiRef).getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
+    var ISSUE_TRACKER_URL = "$!xwiki.getDocument($mainWIkiRef).getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
     #end
     // END_VELOCITY
 
@@ -173,7 +173,9 @@
                     if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
                       $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
                     }
-                    $('#cke_42').remove();
+                    // CKEditor seems to create IDs dynamically, and as such
+                    // you cannot rely on IDs for removing buttons after launch
+                    $('.cke_button__source').remove();
                     return;
                 }
                 setTimeout(untilThen, 100);
