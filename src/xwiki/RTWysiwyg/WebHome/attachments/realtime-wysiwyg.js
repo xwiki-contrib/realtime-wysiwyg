@@ -208,9 +208,17 @@ define([
 
             // TODO ErrorBox, tell the user the session was aborted
             var onAbort = config.onAbort = function (info) {
-                var realtime = info.socket.realtime;
-                realtime.toolbar.failed();
-                toolbar.destroy();
+                if (info.initError) {
+                    // initialization error, abort before initializing.
+                    console.log("Failed to initialize the realtime session. " +
+                        "Falling back to offline editor behaviour.");
+                    setEditable(true);
+                } else {
+                    // default abort behaviour
+                    var realtime = info.socket.realtime;
+                    realtime.toolbar.failed();
+                    toolbar.destroy();
+                }
             };
 
             var onReady = config.onReady = function (info) {
