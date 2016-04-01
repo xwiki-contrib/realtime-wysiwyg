@@ -1,5 +1,4 @@
 define([], function () {
-
     // this makes recursing a lot simpler
     var isArray = function (A) {
         return Object.prototype.toString.call(A)==='[object Array]';
@@ -49,13 +48,24 @@ define([], function () {
         }
     };
 
-    var DOM2HyperJSON = function(el){
+    var isTruthy = function (x) {
+        return x;
+    };
+
+    var DOM2HyperJSON = function(el, predicate, filter){
         if(!el.tagName && el.nodeType === Node.TEXT_NODE){
             return el.textContent;
         }
         if(!el.attributes){
           return;
         }
+        if (predicate) {
+            if (!predicate(el)) {
+                // shortcircuit
+                return;
+            }
+        }
+
         var attributes = {};
 
         var i = 0;
@@ -89,6 +99,9 @@ define([], function () {
             // actually parse out classes so that we produce a valid selector
             // string. leading or trailing spaces would have caused it to choke
             // these are really common in generated html
+            /* TODO this can be done with RegExps alone, and it will be faster
+                but this works and is a little less error prone, albeit slower
+                come back and speed it up when it comes time to optimize */
           sel = sel + attributes.class
             .split(/\s+/g)
             .filter(isValidClass)
@@ -108,11 +121,15 @@ define([], function () {
         // js hint complains if we use 'var' here
         i = 0;
         for(; i < el.childNodes.length; i++){
-          children.push(DOM2HyperJSON(el.childNodes[i]));
+            children.push(DOM2HyperJSON(el.childNodes[i], predicate, filter));
         }
-        result.push(children);
+        result.push(children.filter(isTruthy));
 
-        return result;
+        if (filter) {
+            return filter(result);
+        } else {
+            return result;
+        }
     };
 
     return {
