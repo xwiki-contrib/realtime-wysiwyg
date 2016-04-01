@@ -64,6 +64,7 @@ define([
         }
     };
 
+    // TODO deprecate
     var bindAllEvents = function (textarea, docBody, onEvent, unbind)
     {
         /*
@@ -143,20 +144,21 @@ define([
     };
     /* end websocket stuff */
 
-    //var 
-
     var start = module.exports.start = function (config) {
+        // FIXME we should get rid of the textarea
         var textarea = config.textarea;
+        // TODO test for a falsey websocketURL and complain
         var websocketUrl = config.websocketURL;
+
         var userName = config.userName;
         var channel = config.channel;
+
+        // TODO this is unused, remove
         var cryptKey = config.cryptKey;
+
         var doc = config.doc || null;
 
         var passwd = 'y';
-
-        // trying to deprecate onRemote, prefer loading it via the conf
-        var onRemote = config.onRemote || null;
 
         var transformFunction = config.transformFunction || null;
 
@@ -170,6 +172,7 @@ define([
         var initializing = true;
         var recoverableErrorCount = 0;
 
+        // TODO deprecate, as on cryptpad
         var $textarea = $(textarea);
 
         var bump = function () {};
@@ -177,6 +180,8 @@ define([
         var toReturn = {};
 
         socket.onOpen.push(function (evt) {
+            // FIXME I'm not clear on why this is here
+            // for being able to restart the session without reloading
             if (!initializing) {
                 debug("Starting");
                 // realtime is passed around as an attribute of the socket
@@ -254,14 +259,15 @@ define([
                 if (/\[5,/.test(message)) { verbose("pong"); }
 
                 if (!initializing) {
+                    // FIXME this is unnecessary, see cryptpad
                     if (/\[2,/.test(message)) {
                         //verbose("Got a patch");
                         if (whoami.test(message)) {
                             //verbose("Received own message");
                         } else {
                             //verbose("Received remote message");
-                            if (onRemote) {
-                                onRemote({
+                            if (config.onRemote) {
+                                config.onRemote({
                                     realtime: realtime
                                 });
                             }
@@ -316,10 +322,12 @@ define([
                 }
             }, 200);
 
+            // TODO remove, this isn't necessary anymore
             bindAllEvents(textarea, doc, onEvent, false);
 
             // attach textarea
             // NOTE: should be able to remove the websocket without damaging this
+            // TODO replace with textPatcher.js
             sharejs.attach(textarea, realtime);
 
             realtime.start();
