@@ -64,15 +64,28 @@
     };
 
     var usingCK = function () {
-        var editor = window.XWiki.editor;
-        // there are scripts for CKEditor which get loaded no matter what
-        // this stylesheet only exists if you're using CKEditor to edit
-        if (document.querySelectorAll('link[href*="CKEditor"]').length) {
+        // we can't rely on XWiki to give us the same editor. Sometimes it's
+        // 'inline', sometimes it's not.
+        // var editor = window.XWiki.editor;
+
+        /* Note
+           there are scripts for CKEditor which get loaded no matter what
+           this stylesheet only exists if you're using CKEditor to edit.
+
+           This is liable to break in the future, this should be made more
+           specific, to make sure that we never get other false positives.
+
+           http://jira.xwiki.org/browse/CKEDITOR-46 provides hooks, but these
+           will not exist in older versions of XWiki.
+        */
+
+        // if your document has CKEditor in its title it will have a cannonical
+        // link that will cause a false positive. Check only for stylesheets
+        if (document.querySelectorAll('link[href*="CKEditor"][rel="stylesheet"]').length) {
             console.log("CKEditor detected, loading realtime WYSIWYG code...");
             return true;
         }
         //href='/xwiki/bin/ssx/CKEditor/EditSheet?language=en'
-        //if (editor === 'inline') { return true; }
     };
 
     var pointToRealtime = function (link) {
