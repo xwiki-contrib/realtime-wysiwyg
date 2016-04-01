@@ -55,6 +55,7 @@
         // TODO integrate this notification into the CKEditor upper panel
         console.log("The provided websocketURL was empty, aborting attempt to" +
             "configure a realtime session.");
+        return;
     }
 
     //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
