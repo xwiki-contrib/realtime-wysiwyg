@@ -137,10 +137,10 @@ define([
             root = root || inner;
             sel = sel || Rangy.getSelection(root);
 
-            // FIXME under what circumstances are no ranges found?
+            // rangeCount will be falsey if you aren't focused on the editor
             if (!sel.rangeCount) {
                 error('[cursor.update] no ranges found');
-                return 'no ranges found';
+                return;
             }
             var range = sel.getRangeAt(0);
 
@@ -373,6 +373,26 @@ define([
                 startError: start.error,
                 endError: end.error
             };
+        };
+
+        cursor.brFix = function () {
+            cursor.update();
+            var start = Range.start;
+            var end = Range.end;
+            if (!start.el) { return; }
+
+            if (start.el === end.el && start.offset === end.offset) {
+                if (start.el.tagName === 'BR') {
+                    // get the parent element, which ought to be a P.
+                    var P = start.el.parentNode;
+
+                    [cursor.fixStart, cursor.fixEnd].forEach(function (f) {
+                        f(P, 0);
+                    });
+
+                    cursor.fixSelection(cursor.makeSelection(), cursor.makeRange());
+                }
+            }
         };
 
         return cursor;
