@@ -33,7 +33,7 @@ define([
     /* REALTIME_DEBUG exposes a 'version' attribute.
         this must be updated with every release */
     var REALTIME_DEBUG = window.REALTIME_DEBUG = {
-        version: '1.10',
+        version: '1.11',
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
@@ -177,9 +177,16 @@ define([
                 try {
                     userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
                 } catch (err) {
+                    /*  if you get a patch that you can't render, it
+                        is probably a broken patch for everyone. Steamroll
+                        the error by propogating your own current state back
+                        over the wire, so they correct to your current state.
+                        This should get the session back on track.
+                    */
                     console.log('[applyHjson] err converting hyperjson to dom');
                     console.error(err);
-                    ErrorBox.show("renderbug");
+                    // push your current state back over the wire
+                    module.updateTransport();
                     return;
                 }
                 userDocStateDom.setAttribute("contenteditable", true);
@@ -244,7 +251,7 @@ define([
                 /* handle disconnects somehow */
             };
 
-            var realtime = module.realtime = Realtime.start(config);
+            var realtime = module.realtime = REALTIME_DEBUG.realtime = Realtime.start(config);
             module.abortRealtime = function () {
                 realtime.abort();
             };
@@ -261,7 +268,17 @@ define([
                 realtime.bumpSharejs();
             };
 
+            /*  This exposes a test that you can call at the console.
+                Send arbitrary bad content into Chainpad and over the wire.
+                See how your friends handle it.
+            */
+            var sendBadContent = REALTIME_DEBUG.sendBadContent = function (C) {
+                REALTIME_DEBUG.textarea.val(C);
+                REALTIME_DEBUG.realtime.bumpSharejs();
+            };
+
             editor.on('change', updateTransport);
+            $(inner).on('keydown', cursor.brFix);
         };
 
         var untilThen = function () {
