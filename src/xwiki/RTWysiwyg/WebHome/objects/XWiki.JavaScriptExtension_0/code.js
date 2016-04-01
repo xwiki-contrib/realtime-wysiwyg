@@ -51,6 +51,12 @@
     #end
     // END_VELOCITY
 
+    if (!WEBSOCKET_URL) {
+        // TODO integrate this notification into the CKEditor upper panel
+        console.log("The provided websocketURL was empty, aborting attempt to" +
+            "configure a realtime session.");
+    }
+
     //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
     for (var path in PATHS) { PATHS[path] = PATHS[path] + '?cb='+(new Date()).getTime(); }
     require.config({paths:PATHS});
