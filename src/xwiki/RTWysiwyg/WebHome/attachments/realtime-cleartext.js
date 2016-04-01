@@ -116,7 +116,13 @@ define([
     };
 
     var makeWebsocket = function (url) {
-        var socket = new ReconnectingWebSocket(url);
+        try {
+            var socket = new ReconnectingWebSocket(url);
+        } catch (err) {
+            console.log("Unable to initialize the websocket. Aborting...");
+            console.error(err);
+            return false;
+        }
         var out = {
             onOpen: [],
             onClose: [],
@@ -163,6 +169,15 @@ define([
         var transformFunction = config.transformFunction || null;
 
         var socket = makeWebsocket(websocketUrl);
+
+        if (!socket) {
+            // The websocket failed to initialize. Abort.
+            config.onAbort({
+                error: "Socket failed to initialize",
+                initError: true
+            });
+            return;
+        }
 
         // define this in case it gets called before the rest of our stuff is ready.
         var onEvent = function () { };
