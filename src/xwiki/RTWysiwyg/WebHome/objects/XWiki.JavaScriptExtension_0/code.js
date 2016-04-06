@@ -102,10 +102,18 @@
     };
 
     var pointToRealtime = function (link) {
-        console.log("Presenting option to direct to CKEditor session: %s", href);
-        var href = link.getAttribute('href').replace(/editor=(wiki|inline)[\&]?/, '') +
-                'editor=inline&sheet=CKEditor.EditSheet&force=1';
+        var href = link.getAttribute('href');
 
+        href = href.replace(/\?(.*)$/, function (all, args) {
+            return '?' + args.split('&').filter(function (arg) {
+                if (arg === 'editor=wysiwyg') { return false; }
+                if (arg === 'editor=wiki') { return false; }
+                if (arg === 'sheet=CKEditor.EditSheet') { return false; }
+                if (arg === 'force=1') { return false; }
+            }).join('&');
+        });
+
+        href = href + '&editor=inline&sheet=CKEditor.EditSheet&force=1';
         link.setAttribute('href', href);
         link.innerText = MESSAGES.joinSession;
     };
@@ -204,7 +212,6 @@
             // determine if it's a realtime session
             if (active) {
                 console.log("Found an active realtime");
-                //launchRealtime(config);
                 if (realtimeDisallowed()) {
                     // do nothing
                 } else {
