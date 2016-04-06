@@ -119,8 +119,6 @@ define([
         // TODO this is unused, remove
         var cryptKey = config.cryptKey;
 
-        var doc = config.doc || null;
-
         var passwd = 'y';
 
         var transformFunction = config.transformFunction || null;
@@ -169,9 +167,12 @@ define([
                 });
             }
 
-            var onEvent = toReturn.onEvent = function () {
+            var onEvent = toReturn.onEvent = function (newText) {
                 // This looks broken
                 if (isErrorState || initializing) { return; }
+                if (realtime.getUserDoc() !== newText) {
+                    warn("realtime.getUserDoc() !== newText");
+                }
             };
 
             realtime.onUserListChange(function (userList) {
@@ -199,45 +200,27 @@ define([
                 }
             });
 
-            /* super regex that escapes all the things */
-            var regexEscape = /[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g;
-            var whoami = new RegExp(userName.replace(regexEscape, function (c) {
-                return '\\' +c;
-            }));
+            realtime.onPatch(function () {
+                if (config.onRemote) {
+                    config.onRemote({
+                        realtime: realtime
+                    });
+                }
+            });
 
             // when you receive a message...
             socket.onMessage.push(function (evt) {
-                //console.log("Data: %s\n", evt.data);
                 verbose(evt.data);
                 if (isErrorState) { return; }
 
                 var message = evt.data;
-                verbose(message);
                 allMessages.push(message);
                 if (!initializing) {
-                    if (PARANOIA) {
-                        onEvent();
+                    if (toReturn.onLocal) {
+                        toReturn.onLocal();
                     }
                 }
                 realtime.message(message);
-                if (/\[5,/.test(message)) { verbose("pong"); }
-
-                if (!initializing) {
-                    // FIXME this is unnecessary, see cryptpad
-                    if (/\[2,/.test(message)) {
-                        //verbose("Got a patch");
-                        if (whoami.test(message)) {
-                            //verbose("Received own message");
-                        } else {
-                            //verbose("Received remote message");
-                            if (config.onRemote) {
-                                config.onRemote({
-                                    realtime: realtime
-                                });
-                            }
-                        }
-                    }
-                }
             });
 
             // when a message is ready to send
@@ -264,7 +247,6 @@ define([
 
             socket.onerror = warn;
 
-            // TODO confirm that we can rely on netflux API
             var socketChecker = setInterval(function () {
                 if (checkSocket(socket)) {
                     warn("Socket disconnected!");

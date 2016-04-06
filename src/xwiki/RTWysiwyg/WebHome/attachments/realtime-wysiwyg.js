@@ -269,7 +269,9 @@ define([
                 don't send magicline elements over the wire
                 don't send type="_moz" over the wire
             */
-            var updateTransport = module.updateTransport = function () {
+
+            // assign onLocal to realtime for internal use
+            var updateTransport = module.updateTransport = realtime.onLocal= function () {
                 var hjson = Hyperjson.fromDOM(inner);
 
                 REALTIME_DEBUG.local.hjson = hjson;
