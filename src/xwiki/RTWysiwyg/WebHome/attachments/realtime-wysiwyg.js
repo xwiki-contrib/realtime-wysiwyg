@@ -49,6 +49,21 @@ define([
         return 'rtwiki-uid-' + String(Math.random()).substring(2);
     };
 
+    var isNotMagicLine = function (el) {
+        var filter = (el.tagName === 'SPAN' && el.contentEditable === 'false');
+        if (filter) {
+            console.log("[hyperjson.serializer] prevented and element " +
+                "from being serialized", el);
+            return false;
+        }
+        return true;
+    };
+
+    var brFilter = function (hj) {
+        if (hj[1].type === '_moz') { hj[1].type = undefined; }
+        return hj;
+    };
+
     var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
         var realtimeAllowed = function (bool) {
             if (typeof bool === 'undefined') {
@@ -127,6 +142,12 @@ define([
             // TODO don't wipe out the magicline plugin when receiving patches
             var diffOptions = {
                 preDiffApply: function (info) {
+                    /*  Don't remove local instances of the magicline plugin */
+                    if (info.node && info.node.tagName === 'SPAN' &&
+                        info.node.contentEditable === 'true') {
+                        return true;
+                    }
+
                     if (!cursor.exists()) { return; }
                     var frame = info.frame = cursor.inNode(info.node);
                     if (!frame) { return; }
@@ -272,7 +293,7 @@ define([
 
             // assign onLocal to realtime for internal use
             var updateTransport = module.updateTransport = realtime.onLocal= function () {
-                var hjson = Hyperjson.fromDOM(inner);
+                var hjson = Hyperjson.fromDOM(inner, isNotMagicLine, brFilter);
 
                 REALTIME_DEBUG.local.hjson = hjson;
                 var shjson = JSON.stringify(hjson);
