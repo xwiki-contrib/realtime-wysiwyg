@@ -24,7 +24,7 @@ define([
     'RTWysiwyg_WebHome_json_ot',
     'RTWysiwyg_WebHome_diffDOM',
     'jquery'
-], function (ErrorBox, Realtime, /*Convert,*/Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom) {
+], function (ErrorBox, Realtime, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom) {
     // be very careful, dumping jquery as '$' into the global scope will break
     // prototype js bindings
     var $ = window.jQuery;
@@ -33,7 +33,7 @@ define([
     /* REALTIME_DEBUG exposes a 'version' attribute.
         this must be updated with every release */
     var REALTIME_DEBUG = window.REALTIME_DEBUG = {
-        version: '1.11',
+        version: '1.15',
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
@@ -48,9 +48,6 @@ define([
     var uid = function () {
         return 'rtwiki-uid-' + String(Math.random()).substring(2);
     };
-
-    // TODO this doesn't seem to be used anywhere. We can probably remove it
-    var runningRealtime = false;
 
     var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
         var realtimeAllowed = function (bool) {
@@ -107,8 +104,6 @@ define([
 
         var whenReady = function (editor, iframe) {
             var inner = REALTIME_DEBUG.inner = iframe.contentWindow.body;
-            // TODO replace textarea with minimal transport layer
-            var $textarea = REALTIME_DEBUG.textarea = $('<textarea>');
 
             // TODO add UI hints for when the contenteditable is disabled
             var setEditable = function (bool) {
@@ -120,10 +115,10 @@ define([
             setEditable(false);
 
             var config = {
-                textarea: $textarea[0],
                 websocketURL: WebsocketURL,
                 userName: userName,
                 channel: channel,
+                initialState: JSON.stringify(Hyperjson.fromDOM(inner)),
                 transformFunction: JsonOT.validate
             };
 
@@ -204,6 +199,12 @@ define([
                 var parsed = REALTIME_DEBUG.remote.hjson = JSON.parse(userDoc);
 
                 applyHjson(parsed);
+
+                var userDoc2 = JSON.stringify(Hyperjson.fromDOM(inner));
+                if (userDoc !== userDoc2) {
+                    console.error("userDoc !== userDoc2");
+                    module.realtime.patchText(userDoc2);
+                }
             };
 
             // TODO ErrorBox, tell the user the session was aborted
@@ -246,9 +247,8 @@ define([
                     console.log("userlist change");
                     console.log("There are now %s users", info.userList.length);
                     console.log(info.userList);
-                    if (module.realtime) {
-                        // bump contents when new people join.
-                        module.realtime.bumpSharejs();
+                    if (module.updateTransport) {
+                        module.updateTransport();
                     }
                 }
             };
@@ -259,6 +259,7 @@ define([
                 /* handle disconnects somehow */
             };
 
+            // TODO rename this, as 'realtime' already has other meanings
             var realtime = module.realtime = REALTIME_DEBUG.realtime = Realtime.start(config);
             module.abortRealtime = function () {
                 realtime.abort();
@@ -272,8 +273,11 @@ define([
                 var hjson = Hyperjson.fromDOM(inner);
 
                 REALTIME_DEBUG.local.hjson = hjson;
-                $textarea.val(JSON.stringify(hjson));
-                realtime.bumpSharejs();
+                var shjson = JSON.stringify(hjson);
+                if (!realtime.patchText(shjson)) {
+                    return;
+                }
+                realtime.onEvent(shjson);
             };
 
             /*  This exposes a test that you can call at the console.
@@ -281,8 +285,7 @@ define([
                 See how your friends handle it.
             */
             var sendBadContent = REALTIME_DEBUG.sendBadContent = function (C) {
-                REALTIME_DEBUG.textarea.val(C);
-                REALTIME_DEBUG.realtime.bumpSharejs();
+                realtime.patchText(C);
             };
 
             editor.on('change', updateTransport);

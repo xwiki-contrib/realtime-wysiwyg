@@ -18,10 +18,10 @@ define([
     'RTWysiwyg_WebHome_messages',
     'RTWysiwyg_WebHome_reconnecting_websocket',
     'RTWysiwyg_WebHome_toolbar',
-    'RTWysiwyg_WebHome_sharejs_textarea',
+    'RTWysiwyg_WebHome_text_patcher',
     'RTWysiwyg_WebHome_chainpad',
     'jquery',
-], function (Messages,/*FIXME*/ ReconnectingWebSocket, Toolbar, sharejs) {
+], function (Messages, ReconnectingWebSocket, Toolbar, TextPatcher) {
 
     var $ = window.jQuery;
     var ChainPad = window.ChainPad;
@@ -42,47 +42,6 @@ define([
         verbose = function (x) {
             if (window.verboseLogging) { console.log(x); }
         };
-
-    // ------------------ Trapping Keyboard Events ---------------------- //
-
-    var bindEvents = function (element, events, callback, unbind) {
-        for (var i = 0; i < events.length; i++) {
-            var e = events[i];
-            if (element.addEventListener) {
-                if (unbind) {
-                    element.removeEventListener(e, callback, false);
-                } else {
-                    element.addEventListener(e, callback, false);
-                }
-            } else {
-                if (unbind) {
-                    element.detachEvent('on' + e, callback);
-                } else {
-                    element.attachEvent('on' + e, callback);
-                }
-            }
-        }
-    };
-
-    // TODO deprecate
-    var bindAllEvents = function (textarea, docBody, onEvent, unbind)
-    {
-        /*
-            we use docBody for the purposes of CKEditor.
-            because otherwise special keybindings like ctrl-b and ctrl-i
-            would open bookmarks and info instead of applying bold/italic styles
-        */
-        if (docBody) {
-            bindEvents(docBody,
-               ['textInput', 'keydown', 'keyup', 'select', 'cut', 'paste'],
-               onEvent,
-               unbind);
-        }
-        bindEvents(textarea,
-                   ['mousedown','mouseup','click','change'],
-                   onEvent,
-                   unbind);
-    };
 
     /* websocket stuff */
     var isSocketDisconnected = function (socket, realtime) {
@@ -151,8 +110,6 @@ define([
     /* end websocket stuff */
 
     var start = module.exports.start = function (config) {
-        // FIXME we should get rid of the textarea
-        var textarea = config.textarea;
         // TODO test for a falsey websocketURL and complain
         var websocketUrl = config.websocketURL;
 
@@ -179,18 +136,10 @@ define([
             return;
         }
 
-        // define this in case it gets called before the rest of our stuff is ready.
-        var onEvent = function () { };
-
         var allMessages = [];
         var isErrorState = false;
         var initializing = true;
         var recoverableErrorCount = 0;
-
-        // TODO deprecate, as on cryptpad
-        var $textarea = $(textarea);
-
-        var bump = function () {};
 
         var toReturn = {};
 
@@ -208,7 +157,7 @@ define([
             var realtime = socket.realtime = toReturn.realtime = ChainPad.create(userName,
                                 passwd,
                                 channel,
-                                $(textarea).val(),
+                                config.initialState,
                                 {
                                     transformFunction: config.transformFunction
                                 });
@@ -220,7 +169,7 @@ define([
                 });
             }
 
-            onEvent = toReturn.onEvent = function () {
+            var onEvent = toReturn.onEvent = function () {
                 // This looks broken
                 if (isErrorState || initializing) { return; }
             };
@@ -337,18 +286,20 @@ define([
                 }
             }, 200);
 
-            // TODO remove, this isn't necessary anymore
-            bindAllEvents(textarea, doc, onEvent, false);
+            /*  Formerly this was accomplished with sharejs_textarea
+                Relying on events to propogate through CKEditor and then
+                through a textarea, then ChainPad added an unnecessary step
+                patchText cuts out the middleman.
 
-            // attach textarea
-            // NOTE: should be able to remove the websocket without damaging this
-            // TODO replace with textPatcher.js
-            sharejs.attach(textarea, realtime);
+                Export the patchText function, and pass in your current state
+                of the document you intend to synchronize. patchText will diff
+                it and put the patches into ChainPad */
+            toReturn.patchText = TextPatcher.create({
+                realtime: realtime
+            });
 
             realtime.start();
             debug('started');
-
-            bump = toReturn.bumpSharejs = realtime.bumpSharejs;
 
             toReturn.abort = function () {
                 abort(socket, realtime);

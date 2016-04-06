@@ -26,7 +26,6 @@
         RTWysiwyg_WebHome_realtime_wysiwyg: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
         RTWysiwyg_WebHome_realtime_cleartext: "$doc.getAttachmentURL('realtime-cleartext.js')",
 
-        // RTWysiwyg_WebHome_convert: "$doc.getAttachmentURL('convert.js')",
         RTWysiwyg_WebHome_toolbar: "$doc.getAttachmentURL('toolbar.js')",
         RTWysiwyg_WebHome_cursor: "$doc.getAttachmentURL('cursor.js')",
         RTWysiwyg_WebHome_json_ot: "$doc.getAttachmentURL('json-ot.js')",
@@ -35,7 +34,7 @@
         RTWysiwyg_WebHome_hyperscript: "$doc.getAttachmentURL('hyperscript.js')",
 
         RTWysiwyg_WebHome_treesome: "$doc.getAttachmentURL('treesome.js')",
-        RTWysiwyg_WebHome_sharejs_textarea: "$doc.getAttachmentURL('sharejs_textarea.js')",
+        RTWysiwyg_WebHome_text_patcher: "$doc.getAttachmentURL('text-patcher.js')",
 
         RTWysiwyg_WebHome_diffDOM: "$doc.getAttachmentURL('diffDOM.js')",
 
