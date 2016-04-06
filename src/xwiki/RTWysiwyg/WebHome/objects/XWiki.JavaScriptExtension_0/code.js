@@ -10,6 +10,8 @@
         allowRealtime: "Allow Realtime Collaboration", // TODO: translate
         joinSession: "Join Realtime Collaborative Session",
 
+        wysiwygSessionInProgress: "A Realtime <strong>WYSIWYG</strong> Editor session is in progress:",
+
         disconnected: "Disconnected",
         myself: "Myself",
         guest: "Guest",
@@ -101,6 +103,13 @@
         //href='/xwiki/bin/ssx/CKEditor/EditSheet?language=en'
     };
 
+    // used to insert some descriptive text before the lock link
+    var prependLink = function (link, text) {
+        var p = document.createElement('p');
+        p.innerHTML = text;
+        link.parentElement.insertBefore(p, link);
+    };
+
     var pointToRealtime = function (link) {
         var href = link.getAttribute('href');
 
@@ -116,6 +125,8 @@
         href = href + '&editor=inline&sheet=CKEditor.EditSheet&force=1';
         link.setAttribute('href', href);
         link.innerText = MESSAGES.joinSession;
+
+        prependLink(link, MESSAGES.wysiwygSessionInProgress);
     };
 
     var makeConfig = function () {
