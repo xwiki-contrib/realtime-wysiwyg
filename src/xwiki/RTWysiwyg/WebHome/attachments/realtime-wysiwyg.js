@@ -50,7 +50,7 @@ define([
     };
 
     var isNotMagicLine = function (el) {
-        var filter = (el.tagName === 'SPAN' && el.contentEditable === 'false');
+        var filter = (el.tagName === 'SPAN' && el.getAttribute('contentEditable') === 'false');
         if (filter) {
             console.log("[hyperjson.serializer] prevented and element " +
                 "from being serialized", el);
@@ -144,7 +144,7 @@ define([
                 preDiffApply: function (info) {
                     /*  Don't remove local instances of the magicline plugin */
                     if (info.node && info.node.tagName === 'SPAN' &&
-                        info.node.contentEditable === 'true') {
+                        info.node.getAttribute('contentEditable') === 'false') {
                         return true;
                     }
 
