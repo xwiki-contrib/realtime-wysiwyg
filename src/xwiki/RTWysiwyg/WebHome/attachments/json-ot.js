@@ -1,5 +1,5 @@
 define([
-    '/common/realtime-input.js'
+    'RTWysiwyg_WebHome_chainpad'
 ], function () {
     var ChainPad = window.ChainPad;
     var JsonOT = {};
