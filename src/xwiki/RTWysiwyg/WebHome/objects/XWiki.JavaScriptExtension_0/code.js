@@ -1,6 +1,6 @@
 ;(function() {
     // VELOCITY
-    var WEBSOCKET_URL = "$!services.websocket.getURL('realtime')";
+    var WEBSOCKET_URL = "$!services.websocket.getURL('realtimeNetflux')";
     var USER = "$!xcontext.getUserReference()" || "xwiki:XWiki.XWikiGuest";
     var PRETTY_USER = "$xwiki.getUserName($xcontext.getUser(), false)";
     var DEMO_MODE = "$!request.getParameter('demoMode')" || false;
@@ -23,9 +23,10 @@
     };
     var PATHS = {
         RTWysiwyg_WebHome_chainpad: "$doc.getAttachmentURL('chainpad.js')",
-        RTWysiwyg_WebHome_realtime_wysiwyg: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
-        RTWysiwyg_WebHome_realtime_cleartext: "$doc.getAttachmentURL('realtime-cleartext.js')",
+        RTWysiwyg_WebHome_realtime_netflux: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
+        RTWysiwyg_WebHome_realtime_input: "$doc.getAttachmentURL('realtime-input.js')",
 
+        // RTWysiwyg_WebHome_convert: "$doc.getAttachmentURL('convert.js')",
         RTWysiwyg_WebHome_toolbar: "$doc.getAttachmentURL('toolbar.js')",
         RTWysiwyg_WebHome_cursor: "$doc.getAttachmentURL('cursor.js')",
         RTWysiwyg_WebHome_json_ot: "$doc.getAttachmentURL('json-ot.js')",
@@ -33,13 +34,15 @@
         RTWysiwyg_WebHome_hyperjson: "$doc.getAttachmentURL('hyperjson.js')",
         RTWysiwyg_WebHome_hyperscript: "$doc.getAttachmentURL('hyperscript.js')",
 
-        RTWysiwyg_WebHome_treesome: "$doc.getAttachmentURL('treesome.js')",
-        RTWysiwyg_WebHome_text_patcher: "$doc.getAttachmentURL('text-patcher.js')",
-
         RTWysiwyg_WebHome_diffDOM: "$doc.getAttachmentURL('diffDOM.js')",
 
+        RTWysiwyg_WebHome_treesome: "$doc.getAttachmentURL('treesome.js')",
         RTWysiwyg_WebHome_messages: "$doc.getAttachmentURL('messages.js')",
-        RTWysiwyg_WebHome_reconnecting_websocket: "$doc.getAttachmentURL('reconnecting-websocket.js')",
+        RTWysiwyg_WebHome_promises: "$doc.getAttachmentURL('es6-promise.min.js')",
+        'json.sortify': "$doc.getAttachmentURL('JSON.sortify.js')",
+        RTWysiwyg_WebHome_netflux: "$doc.getAttachmentURL('netflux-client.js')",
+        RTWysiwyg_WebHome_text_patcher: "$doc.getAttachmentURL('TextPatcher.js')",
+        RTWysiwyg_WebHome_tests: "$doc.getAttachmentURL('TypingTests.js')",
 
         RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy-core.min.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
@@ -144,28 +147,45 @@
     var checkSocket = function (config, callback) {
         var socket = new WebSocket(config.websocketURL);
         socket.onopen = function (evt) {
-            var regMsgEnd = '3:[0]';
+            var state = 0;
+            var userCount = 0;
+            var uid;
             socket.onmessage = function (evt) {
-                if (evt.data.indexOf(regMsgEnd) !== evt.data.length - regMsgEnd.length) {
-                    // not a register message (ignore it)
-                } else if (evt.data.indexOf(config.userName.length + ':' + config.userName) === 0) {
-                    // it's you registering
-                    socket.close();
-                    callback(false);
-                } else {
-                    socket.close();
-                    callback(true);
+                var msg = JSON.parse(evt.data);
+                if(state === 0 && msg[2] === "IDENT") {
+                    uid = msg[3];
+                    var joinMsg = [1, "JOIN", config.channel];
+                    socket.send(JSON.stringify(joinMsg));
+                    state = 1;
+                    return;
+                }
+                if(state === 1 && msg[1] === "JACK" && msg[2] === config.channel) {
+                    state = 2;
+                    return;
+                }
+                if(state === 2 && msg[2] === "JOIN" && msg[3] === config.channel) {
+                    if(msg[1] ===  uid) {
+                        // If no other user : create the RT channel
+                        if(userCount === 0) {
+                            socket.close();
+                            callback(false);
+                        }
+                        // If there is at least one user in the channel
+                        else {
+                            socket.close();
+                            callback(true);
+                        }
+                        return;
+                    }
+                    // Count only users with a 32 chars name. The history keeper is a fake user with a 16 chars name.
+                    userCount += (msg[1].length === 32) ? 1 : 0;
                 }
             };
-            socket.send('1:x' +
-                config.userName.length + ':' + config.userName +
-                config.channel.length + ':' + config.channel +
-                '3:[0]');
         };
     };
 
     var launchRealtime = function (config) {
-        require(['jquery', 'RTWysiwyg_WebHome_realtime_wysiwyg'], function ($, RTWysiwyg) {
+        require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
             if (RTWysiwyg && RTWysiwyg.main) {
                 RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
                 // Begin : Add the issue tracker icon

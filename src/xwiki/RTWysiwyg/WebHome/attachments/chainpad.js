@@ -224,16 +224,10 @@ var transform = Patch.transform = function (origToTransform, transformBy, doc, t
     var text = doc;
     for (var i = toTransform.operations.length-1; i >= 0; i--) {
         for (var j = transformBy.operations.length-1; j >= 0; j--) {
-            try {
-                toTransform.operations[i] = Operation.transform(text,
-                                                                toTransform.operations[i],
-                                                                transformBy.operations[j],
-                                                                transformFunction);
-            } catch (e) {
-                console.error("The pluggable transform function threw an error, " +
-                    "failing operational transformation");
-                return create(Sha.hex_sha256(resultOfTransformBy));
-            }
+            toTransform.operations[i] = Operation.transform(text,
+                                                            toTransform.operations[i],
+                                                            transformBy.operations[j],
+                                                            transformFunction);
             if (!toTransform.operations[i]) {
                 break;
             }
@@ -375,9 +369,6 @@ var random = Patch.random = function (doc, opCount) {
  */
 
 var PARANOIA = module.exports.PARANOIA = true;
-
-/* Good testing but slooooooooooow */
-var VALIDATE_ENTIRE_CHAIN_EACH_MSG = module.exports.VALIDATE_ENTIRE_CHAIN_EACH_MSG = false;
 
 /* throw errors over non-compliant messages which would otherwise be treated as invalid */
 var TESTING = module.exports.TESTING = true;
@@ -841,9 +832,7 @@ var check = ChainPad.check = function(realtime) {
         Common.assert(uiDoc === realtime.userInterfaceContent);
     }
 
-    if (!Common.VALIDATE_ENTIRE_CHAIN_EACH_MSG) { return; }
-
-    var doc = realtime.authDoc;
+    /*var doc = realtime.authDoc;
     var patchMsg = realtime.best;
     Common.assert(patchMsg.content.inverseOf.parentHash === realtime.uncommitted.parentHash);
     var patches = [];
@@ -855,7 +844,7 @@ var check = ChainPad.check = function(realtime) {
     while ((patchMsg = patches.pop())) {
         doc = Patch.apply(patchMsg.content, doc);
     }
-    Common.assert(doc === realtime.authDoc);
+    Common.assert(doc === realtime.authDoc);*/
 };
 
 var doOperation = ChainPad.doOperation = function (realtime, op) {

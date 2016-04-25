@@ -1,70 +1,85 @@
-/*
- * Copyright 2014 XWiki SAS
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 define([
     'RTWysiwyg_ErrorBox',
-    'RTWysiwyg_WebHome_realtime_cleartext',
+    'RTWysiwyg_WebHome_realtime_input',
     'RTWysiwyg_WebHome_hyperjson',
     'RTWysiwyg_WebHome_hyperscript',
     'RTWysiwyg_WebHome_toolbar',
     'RTWysiwyg_WebHome_cursor',
     'RTWysiwyg_WebHome_json_ot',
+    'RTWysiwyg_WebHome_tests',
+    'json.sortify',
+    'RTWysiwyg_WebHome_text_patcher',
     'RTWysiwyg_WebHome_diffDOM',
     'jquery'
-], function (ErrorBox, Realtime, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom) {
-    // be very careful, dumping jquery as '$' into the global scope will break
-    // prototype js bindings
+], function (ErrorBox, realtimeInput, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
     /* REALTIME_DEBUG exposes a 'version' attribute.
         this must be updated with every release */
     var REALTIME_DEBUG = window.REALTIME_DEBUG = {
-        version: '1.15',
+        version: '1.10',
         local: {},
         remote: {},
         Hyperscript: Hyperscript,
         Hyperjson: Hyperjson
     };
 
+    // Create a fake "Crypto" object which will be passed to realtime-input
+    var Crypto = {
+        encrypt : function(msg, key) { return msg; },
+        decrypt : function(msg, key) { return msg; },
+        parseKey : function(key) { return {cryptKey : ''}; }
+    }
+
+    var stringify = function (obj) {
+        return JSONSortify(obj);
+    };
+
+    window.Toolbar = Toolbar;
+    window.Hyperjson = Hyperjson;
+
+    var hjsonToDom = function (H) {
+        return Hyperjson.callOn(H, Hyperscript);
+    };
+
     /** Key in the localStore which indicates realtime activity should be disallowed. */
     var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
 
-    var module = {};
+    var module = window.REALTIME_MODULE = {
+        Hyperjson: Hyperjson,
+        Hyperscript: Hyperscript
+    };
 
     var uid = function () {
         return 'rtwiki-uid-' + String(Math.random()).substring(2);
     };
 
     var isNotMagicLine = function (el) {
-        var filter = (el.tagName === 'SPAN' && el.getAttribute('contentEditable') === 'false');
+        // factor as:
+        // return !(el.tagName === 'SPAN' && el.contentEditable === 'false');
+        var filter = (el.tagName === 'SPAN' && el.contentEditable === 'false');
         if (filter) {
-            console.log("[hyperjson.serializer] prevented and element " +
-                "from being serialized", el);
+            console.log("[hyperjson.serializer] prevented an element" +
+                "from being serialized:", el);
             return false;
         }
         return true;
     };
 
+    /* catch `type="_moz"` before it goes over the wire */
     var brFilter = function (hj) {
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
         return hj;
     };
 
+    var stringifyDOM = function (dom) {
+        return stringify(Hyperjson.fromDOM(dom, isNotMagicLine, brFilter));
+    };
+
     var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
+
+        var key = '';
         var realtimeAllowed = function (bool) {
             if (typeof bool === 'undefined') {
                 var disallow = localStorage.getItem(LOCALSTORAGE_DISALLOW);
@@ -86,7 +101,7 @@ define([
         var disallowButtonHTML = ('<div class="rtwiki-allow-outerdiv">' +
             '<label class="rtwiki-allow-label" for="' + allowRealtimeCbId + '">' +
                 '<input type="checkbox" class="rtwiki-allow" id="' + allowRealtimeCbId + '" '+
-                    checked + ' />' + ' ' + Messages.allowRealtime + 
+                    checked + ' />' + ' ' + Messages.allowRealtime +
             '</label>' +
         '</div>');
 
@@ -116,51 +131,67 @@ define([
             console.log("Realtime is disallowed. Quitting");
             return;
         }
-
         var whenReady = function (editor, iframe) {
-            var inner = REALTIME_DEBUG.inner = iframe.contentWindow.body;
 
-            // TODO add UI hints for when the contenteditable is disabled
-            var setEditable = function (bool) {
+            var inner = iframe.contentWindow.body;
+            var cursor = window.cursor = Cursor(inner);
+
+            var setEditable = module.setEditable = function (bool) {
                 inner.setAttribute('contenteditable', bool);
             };
 
-            var initializing = true;
-            // disable CKEditor until the realtime is ready
+            // don't let the user edit until the pad is ready
             setEditable(false);
 
-            var config = {
-                websocketURL: WebsocketURL,
-                userName: userName,
-                channel: channel,
-                initialState: JSON.stringify(Hyperjson.fromDOM(inner)),
-                transformFunction: JsonOT.validate
-            };
-
-            var cursor = window.cursor = Cursor(inner);
-
-            // TODO don't wipe out the magicline plugin when receiving patches
             var diffOptions = {
                 preDiffApply: function (info) {
-                    /*  Don't remove local instances of the magicline plugin */
+                    /* DiffDOM will filter out magicline plugin elements
+                        in practice this will make it impossible to use it
+                        while someone else is typing, which could be annoying.
+
+                        we should check when such an element is going to be
+                        removed, and prevent that from happening. */
                     if (info.node && info.node.tagName === 'SPAN' &&
-                        info.node.getAttribute('contentEditable') === 'false') {
-                        return true;
+                        info.node.getAttribute('contentEditable') === "false") {
+                        // it seems to be a magicline plugin element...
+                        if (info.diff.action === 'removeElement') {
+                            // and you're about to remove it...
+                            // this probably isn't what you want
+
+                            /*
+                                I have never seen this in the console, but the
+                                magic line is still getting removed on remote
+                                edits. This suggests that it's getting removed
+                                by something other than diffDom.
+                            */
+                            console.log("preventing removal of the magic line!");
+
+                            // return true to prevent diff application
+                            return true;
+                        }
                     }
 
+                    // no use trying to recover the cursor if it doesn't exist
                     if (!cursor.exists()) { return; }
+
+                    /*  frame is either 0, 1, 2, or 3, depending on which
+                        cursor frames were affected: none, first, last, or both
+                    */
                     var frame = info.frame = cursor.inNode(info.node);
+
                     if (!frame) { return; }
-                    if (typeof info.diff.oldValue === 'string' &&
-                        typeof info.diff.newValue === 'string') {
-                        var pushes = cursor.pushDelta(info.diff.oldValue,
-                            info.diff.newValue);
+
+                    if (typeof info.diff.oldValue === 'string' && typeof info.diff.newValue === 'string') {
+                        var pushes = cursor.pushDelta(info.diff.oldValue, info.diff.newValue);
+
                         if (frame & 1) {
+                            // push cursor start if necessary
                             if (pushes.commonStart < cursor.Range.start.offset) {
                                 cursor.Range.start.offset += pushes.delta;
                             }
                         }
                         if (frame & 2) {
+                            // push cursor end if necessary
                             if (pushes.commonStart < cursor.Range.end.offset) {
                                 cursor.Range.end.offset += pushes.delta;
                             }
@@ -172,7 +203,7 @@ define([
                         if (info.node) {
                             if (info.frame & 1) { cursor.fixStart(info.node); }
                             if (info.frame & 2) { cursor.fixEnd(info.node); }
-                        } else { console.log("info.node did not exist"); }
+                        } else { console.error("info.node did not exist"); }
 
                         var sel = cursor.makeSelection();
                         var range = cursor.makeRange();
@@ -182,143 +213,189 @@ define([
                 }
             };
 
-            var applyHjson = function (parsed) {
-                if (typeof (parsed) !== 'object') {
-                    // we won't be able to patch it in...
-                    console.log("[applyHjson] supplied argument was not valid hyperjson");
-                    return;
+            var initializing = true;
+            var userList = {}; // List of pretty name of all users (mapped with their server ID)
+            var toolbarList; // List of users still connected to the channel (server IDs)
+            var addToUserList = function(data) {
+                for (var attrname in data) { userList[attrname] = data[attrname]; }
+                if(toolbarList && typeof toolbarList.onChange === "function") {
+                    toolbarList.onChange(userList);
                 }
-
-                var userDocStateDom;
-                try {
-                    userDocStateDom = Hyperjson.callOn(parsed, Hyperscript);
-                } catch (err) {
-                    /*  if you get a patch that you can't render, it
-                        is probably a broken patch for everyone. Steamroll
-                        the error by propogating your own current state back
-                        over the wire, so they correct to your current state.
-                        This should get the session back on track.
-                    */
-                    console.log('[applyHjson] err converting hyperjson to dom');
-                    console.error(err);
-                    // push your current state back over the wire
-                    module.updateTransport();
-                    return;
-                }
-                userDocStateDom.setAttribute("contenteditable", true);
-                var DD = new DiffDom(diffOptions);
-                var patch = DD.diff(inner, userDocStateDom);
-                DD.apply(inner, patch);
             };
 
-            var onRemote = config.onRemote = function (info) {
+            var myData = {};
+            var myUserName = ''; // My "pretty name"
+            var myID; // My server ID
+
+            var setMyID = function(info) {
+              myID = info.myID || null;
+              myUserName = myID;
+              myData[myID] = {
+                name: userName
+              };
+              addToUserList(myData);
+            };
+
+
+            var DD = new DiffDom(diffOptions);
+
+            // apply patches, and try not to lose the cursor in the process!
+            var applyHjson = function (shjson) {
+                var userDocStateDom = hjsonToDom(JSON.parse(shjson));
+                userDocStateDom.setAttribute("contenteditable", "true"); // lol wtf
+                var patch = (DD).diff(inner, userDocStateDom);
+                (DD).apply(inner, patch);
+            };
+            var realtimeOptions = {
+                // provide initialstate...
+                initialState: stringifyDOM(inner) || '{}',
+
+                // the websocket URL
+                websocketURL: WebsocketURL,
+
+                // our username
+                userName: userName,
+
+                // the channel we will communicate over
+                channel: channel,
+
+                // our encryption key
+                cryptKey: key,
+
+
+                // method which allows us to get the id of the user
+                setMyID: setMyID,
+
+                // Crypto object to avoid loading it twice in Cryptpad
+                crypto: Crypto,
+
+                // really basic operational transform
+                transformFunction : JsonOT.validate
+            };
+            var updateUserList = function(shjson) {
+                // Extract the user list (metadata) from the hyperjson
+                var hjson = JSON.parse(shjson);
+                var peerUserList = hjson[3];
+                if(peerUserList && peerUserList.metadata) {
+                  var userData = peerUserList.metadata;
+                  // Update the local user data
+                  addToUserList(userData);
+                  hjson.pop();
+                }
+                return hjson;
+            }
+
+            var onRemote = realtimeOptions.onRemote = function (info) {
                 if (initializing) { return; }
+
+                var shjson = info.realtime.getUserDoc();
+
+                // remember where the cursor is
                 cursor.update();
 
-                var userDoc = REALTIME_DEBUG.remote.userDoc = info.realtime.getUserDoc();
+                var hjson = updateUserList(shjson);
 
-                var parsed = REALTIME_DEBUG.remote.hjson = JSON.parse(userDoc);
+                // build a dom from HJSON, diff, and patch the editor
+                applyHjson(shjson);
 
-                applyHjson(parsed);
+                // Build a new stringified Chainpad hyperjson without metadata to compare with the one build from the dom
+                shjson = stringify(hjson);
 
-                var userDoc2 = JSON.stringify(Hyperjson.fromDOM(inner));
-                if (userDoc !== userDoc2) {
-                    console.error("userDoc !== userDoc2");
-                    module.realtime.patchText(userDoc2);
+                var shjson2 = stringifyDOM(inner);
+                if (shjson2 !== shjson) {
+                    console.error("shjson2 !== shjson");
+                    module.patchText(shjson2);
                 }
             };
 
-            // TODO ErrorBox, tell the user the session was aborted
-            var onAbort = config.onAbort = function (info) {
-                if (info.initError) {
-                    // initialization error, abort before initializing.
-                    console.log("Failed to initialize the realtime session. " +
-                        "Falling back to offline editor behaviour.");
-                    setEditable(true);
-                } else {
-                    // default abort behaviour
-                    var realtime = info.socket.realtime;
-                    realtime.toolbar.failed();
-                    toolbar.destroy();
-                }
+            var onInit = realtimeOptions.onInit = function (info) {
+                var $bar = $('#cke_1_toolbox');
+                toolbarList = info.userList;
+                var config = {
+                    userData: userList
+                    // changeNameID: 'cryptpad-changeName'
+                };
+                toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config);
             };
 
-            var onReady = config.onReady = function (info) {
-                console.log("Realtime is ready!");
+            var onReady = realtimeOptions.onReady = function (info) {
+                module.patchText = TextPatcher.create({
+                    realtime: info.realtime,
+                    logging: false,
+                });
+
+                module.realtime = info.realtime;
+
+                var shjson = info.realtime.getUserDoc();
+
+                // Update the user list to link the wiki name to the user id
+                updateUserList(shjson);
+
+                applyHjson(shjson);
+
+                console.log("Unlocking editor");
                 initializing = false;
                 setEditable(true);
-
-                var parsed;
-                try {
-                    parsed = JSON.parse(info.realtime.getUserDoc());
-                } catch (err) {
-                    // probably not an error that matters.
-                    //console.error(err);
-
-                    console.log("Readying new document");
-                    onRemote(info);
-                    return;
-                }
-
-                applyHjson(parsed);
             };
 
-            var onUserListChange = config.onUserListChange = function (info) {
-                if (!initializing) {
-                    console.log("userlist change");
-                    console.log("There are now %s users", info.userList.length);
-                    console.log(info.userList);
-                    if (module.updateTransport) {
-                        module.updateTransport();
-                    }
-                }
+            var onAbort = realtimeOptions.onAbort = function (info) {
+                console.log("Aborting the session!");
+                // TODO inform them that the session was torn down
+                toolbar.failed();
+                toolbar.destroy();
             };
 
-            var onInit = config.onInit = function (info) {
-                var $bar = $('#cke_1_toolbox');
-                toolbar = info.realtime.toolbar = Toolbar.create($bar, userName, info.realtime);
-                /* handle disconnects somehow */
-            };
+            var onLocal = realtimeOptions.onLocal = function () {
+                if (initializing) { return; }
 
-            // TODO rename this, as 'realtime' already has other meanings
-            var realtime = module.realtime = REALTIME_DEBUG.realtime = Realtime.start(config);
-            module.abortRealtime = function () {
-                realtime.abort();
-            };
-
-            /* TODO
-                don't send magicline elements over the wire
-                don't send type="_moz" over the wire
-            */
-
-            // assign onLocal to realtime for internal use
-            var updateTransport = module.updateTransport = realtime.onLocal= function () {
+                // serialize your DOM into an object
                 var hjson = Hyperjson.fromDOM(inner, isNotMagicLine, brFilter);
 
-                REALTIME_DEBUG.local.hjson = hjson;
-                var shjson = JSON.stringify(hjson);
-                if (!realtime.patchText(shjson)) {
-                    return;
+                // append the userlist to the hyperjson structure
+                if(Object.keys(myData).length > 0) {
+                    hjson[3] = {metadata: userList};
                 }
-                realtime.onEvent(shjson);
+                // stringify the json and send it into chainpad
+                var shjson = stringify(hjson);
+                module.patchText(shjson);
+
+                if (module.realtime.getUserDoc() !== shjson) {
+                    console.error("realtime.getUserDoc() !== shjson");
+                }
             };
 
-            /*  This exposes a test that you can call at the console.
-                Send arbitrary bad content into Chainpad and over the wire.
-                See how your friends handle it.
-            */
-            var sendBadContent = REALTIME_DEBUG.sendBadContent = function (C) {
-                realtime.patchText(C);
+            var rti = module.realtimeInput = realtimeInput.start(realtimeOptions);
+            module.abortRealtime = function () {
+                module.realtime.abort();
             };
 
-            editor.on('change', updateTransport);
-            $(inner).on('keydown', cursor.brFix);
+            /* hitting enter makes a new line, but places the cursor inside
+                of the <br> instead of the <p>. This makes it such that you
+                cannot type until you click, which is rather unnacceptable.
+                If the cursor is ever inside such a <br>, you probably want
+                to push it out to the parent element, which ought to be a
+                paragraph tag. This needs to be done on keydown, otherwise
+                the first such keypress will not be inserted into the P. */
+            inner.addEventListener('keydown', cursor.brFix);
+
+            editor.on('change', onLocal);
+
+            // export the typing tests to the window.
+            // call like `test = easyTest()`
+            // terminate the test like `test.cancel()`
+            var easyTest = window.easyTest = function () {
+                cursor.update();
+                var start = cursor.Range.start;
+                var test = TypingTest.testInput(inner, start.el, start.offset, onLocal);
+                onLocal();
+                return test;
+            };
         };
 
         var untilThen = function () {
             var $iframe = $('iframe');
             if (window.CKEDITOR &&
-                window.CKEDITOR.instances && 
+                window.CKEDITOR.instances &&
                 window.CKEDITOR.instances.content &&
                 $iframe.length &&
                 $iframe[0].contentWindow &&
@@ -327,7 +404,6 @@ define([
             }
             setTimeout(untilThen, 100);
         };
-
         /* wait for the existence of CKEDITOR before doing things...  */
         untilThen();
     };

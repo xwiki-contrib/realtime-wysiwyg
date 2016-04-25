@@ -4,16 +4,6 @@ define([], function () {
         return Object.prototype.toString.call(A)==='[object Array]';
     };
 
-    var parseStyle = function(el){
-      var style = el.style;
-      var output = {};
-      for (var i = 0; i < style.length; ++i) {
-        var item = style.item(i);
-        output[item] = style[item];
-      }
-      return output;
-    };
-
     var callOnHyperJSON = function (hj, cb) {
         var children;
 
@@ -23,8 +13,7 @@ define([], function () {
                     // if the child is an array, recurse
                     return callOnHyperJSON(child, cb);
                 } else if (typeof (child) === 'string') {
-                    // string nodes have leading and trailing quotes
-                    return child.replace(/(^"|"$)/g,"");
+                    return child;
                 } else {
                     // the above branches should cover all methods
                     // if we hit this, there is a problem
@@ -36,16 +25,6 @@ define([], function () {
         }
         // this should return the top level element of your new DOM
         return cb(hj[0], hj[1], children);
-    };
-
-    var classify = function (token) {
-        return '.' + token.trim();
-    };
-
-    var isValidClass = function (x) {
-        if (x && /\S/.test(x)) {
-            return true;
-        }
     };
 
     var isTruthy = function (x) {
@@ -70,15 +49,10 @@ define([], function () {
 
         var i = 0;
         for(;i < el.attributes.length; i++){
-          var attr = el.attributes[i];
-          if(attr.name && attr.value){
-            if(attr.name === "style"){
-              attributes.style = parseStyle(el);
+            var attr = el.attributes[i];
+            if(attr.name && attr.value){
+                attributes[attr.name] = attr.value;
             }
-            else{
-              attributes[attr.name] = attr.value;
-            }
-          }
         }
 
         // this should never be longer than three elements
@@ -94,21 +68,6 @@ define([], function () {
             // unless we come across a strange browser in the wild
           sel = sel +'#'+ attributes.id;
           delete attributes.id;
-        }
-        if(attributes.class){
-            // actually parse out classes so that we produce a valid selector
-            // string. leading or trailing spaces would have caused it to choke
-            // these are really common in generated html
-            /* TODO this can be done with RegExps alone, and it will be faster
-                but this works and is a little less error prone, albeit slower
-                come back and speed it up when it comes time to optimize */
-          sel = sel + attributes.class
-            .split(/\s+/g)
-            .filter(isValidClass)
-            .map(classify)
-            .join('')
-            .replace(/\.\./g, '.');
-          delete attributes.class;
         }
         result.push(sel);
 

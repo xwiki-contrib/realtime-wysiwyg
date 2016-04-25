@@ -8,6 +8,9 @@ define([
     /** Id of the div containing the user list. */
     var USER_LIST_CLS = 'rtwysiwyg-user-list';
 
+    /** Id of the button to change my username. */
+    var USERNAME_BUTTON_ID = 'rtwysiwyg-change-username';
+
     /** Id of the div containing the lag info. */
     var LAG_ELEM_CLS = 'rtwysiwyg-lag';
 
@@ -22,10 +25,6 @@ define([
 
     var uid = function () {
         return 'rtwysiwyg-uid-' + String(Math.random()).substring(2);
-    };
-
-    var destroy = function ($container) {
-
     };
 
     var createRealtimeToolbar = function ($container) {
@@ -62,6 +61,12 @@ define([
             '    line-height: 25px;',
             '    height: 22px;',
             '}',
+            '.' + TOOLBAR_CLS + ' div.rtwysiwyg-back {',
+            '    padding: 0;',
+            '    font-weight: bold;',
+            '    cursor: pointer;',
+            '    color: #000;',
+            '}',
             '.rtwysiwyg-toolbar-leftside div {',
             '    float: left;',
             '}',
@@ -89,6 +94,16 @@ define([
         return toolbar;
     };
 
+    var createEscape = function ($container) {
+        var id = uid();
+        $container.append('<div class="rtwysiwyg-back" id="' + id + '">&#8656; Back</div>');
+        var $ret = $container.find('#'+id);
+        $ret.on('click', function () {
+            window.location.href = '/';
+        });
+        return $ret[0];
+    };
+
     var createSpinner = function ($container) {
         var id = uid();
         $container.append('<div class="rtwysiwyg-spinner" id="'+id+'"></div>');
@@ -111,16 +126,18 @@ define([
         return $container.find('#'+id)[0];
     };
 
-    var getOtherUsers = function(myUserName, userList) {
+    var getOtherUsers = function(myUserName, userList, userData) {
       var i = 0;
       var list = '';
       userList.forEach(function(user) {
         if(user !== myUserName) {
-          var userName = user.replace(/^.*-([^-]*)%2d[0-9]*$/, function(all, one) {
-            return decodeURIComponent(one);
-          });
+          var data = (userData) ? (userData[user] || null) : null;
+          var userName = (data) ? data.name : null;
+          userName = (userName) ? userName.replace(/^.*-([^-]*)%2d[0-9]*$/, function(all, one) {
+              return decodeURIComponent(one);
+            }) : null;
           if(userName) {
-            if(i === 0) list = ' : ';
+            if(i === 0) { list = ' : '; }
             list += userName + ', ';
             i++;
           }
@@ -129,19 +146,24 @@ define([
       return (i > 0) ? list.slice(0, -2) : list;
     };
 
-    var updateUserList = function (myUserName, listElement, userList) {
+    var createChangeName = function($container, userList, buttonID) {
+        var id = uid();
+        userList.innerHTML = '<span class="cke_toolgroup" id="' + buttonID + '"><a id="' + USERNAME_BUTTON_ID + '" class="cke_button">Change name</a></span><span id="' + id + '"></span>';
+        return $container.find('#'+id)[0];
+    };
+
+    var updateUserList = function (myUserName, listElement, userList, userData) {
         var meIdx = userList.indexOf(myUserName);
         if (meIdx === -1) {
             listElement.textContent = Messages.synchronizing;
             return;
         }
-        var userNamesList = getOtherUsers(myUserName, userList);
         if (userList.length === 1) {
-            listElement.textContent = Messages.editingAlone;
+            listElement.innerHTML = Messages.editingAlone;
         } else if (userList.length === 2) {
-            listElement.textContent = Messages.editingWithOneOtherPerson + userNamesList;
+            listElement.innerHTML = Messages.editingWithOneOtherPerson + getOtherUsers(myUserName, userList, userData);
         } else {
-            listElement.textContent = Messages.editingWith + ' ' + (userList.length - 1) + ' ' + Messages.otherPeople + userNamesList;
+            listElement.innerHTML = Messages.editingWith + ' ' + (userList.length - 1) + ' ' + Messages.otherPeople + getOtherUsers(myUserName, userList, userData);
         }
     };
 
@@ -151,14 +173,20 @@ define([
         return $container.find('#'+id)[0];
     };
 
-    var checkLag = function (realtime, lagElement) {
-        var lag = realtime.getLag();
-        var lagSec = lag.lag/1000;
+    var checkLag = function (getLag, lagElement) {
+        if(typeof getLag !== "function") { return; }
+        var lag = getLag();
         var lagMsg = Messages.lag + ' ';
-        if (lag.waiting && lagSec > 1) {
-            lagMsg += "?? " + Math.floor(lagSec);
-        } else {
-            lagMsg += lagSec;
+        if(lag) {
+          var lagSec = lag/1000;
+          if (lag.waiting && lagSec > 1) {
+              lagMsg += "?? " + Math.floor(lagSec);
+          } else {
+              lagMsg += lagSec;
+          }
+        }
+        else {
+          lagMsg += "??";
         }
         lagElement.textContent = lagMsg;
     };
@@ -189,21 +217,34 @@ define([
         localStorage['CryptPad_RECENTPADS'] = JSON.stringify(out);
     };
 
-    var create = function ($container, myUserName, realtime) {
+    var create = function ($container, myUserName, realtime, getLag, userList, config) {
         var toolbar = createRealtimeToolbar($container);
+        // createEscape(toolbar.find('.rtwysiwyg-toolbar-leftside'));
         var userListElement = createUserList(toolbar.find('.rtwysiwyg-toolbar-leftside'));
         var spinner = createSpinner(toolbar.find('.rtwysiwyg-toolbar-rightside'));
         var lagElement = createLagElement(toolbar.find('.rtwysiwyg-toolbar-rightside'));
+        var userData = config.userData;
+        var changeNameID = config.changeNameID;
+
+        // Check if the user is allowed to change his name
+        if(changeNameID) {
+            // Create the button and update the element containing the user list
+            userListElement = createChangeName($container, userListElement, changeNameID);
+        }
 
         rememberPad();
 
         var connected = false;
 
-        realtime.onUserListChange(function (userList) {
-            if (userList.indexOf(myUserName) !== -1) { connected = true; }
-            if (!connected) { return; }
-            updateUserList(myUserName, userListElement, userList);
-        });
+        userList.onChange = function(newUserData) {
+          var users = userList.users;
+          if (users.indexOf(myUserName) !== -1) { connected = true; }
+          if (!connected) { return; }
+          if(newUserData) { // Someone has changed his name/color
+            userData = newUserData;
+          }
+          updateUserList(myUserName, userListElement, users, userData);
+        };
 
         var ks = function () {
             if (connected) { kickSpinner(spinner, false); }
@@ -215,7 +256,7 @@ define([
 
         setInterval(function () {
             if (!connected) { return; }
-            checkLag(realtime, lagElement);
+            checkLag(getLag, lagElement);
         }, 3000);
 
         return {
@@ -231,9 +272,6 @@ define([
             },
             connected: function () {
                 connected = true;
-            },
-            destroy: function () {
-                toolbar.remove();
             }
         };
     };
