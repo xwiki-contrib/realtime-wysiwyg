@@ -213,6 +213,7 @@ define([
                 }
             };
 
+
             var initializing = true;
             var userList = {}; // List of pretty name of all users (mapped with their server ID)
             var toolbarList; // List of users still connected to the channel (server IDs)
@@ -246,6 +247,13 @@ define([
                 var patch = (DD).diff(inner, userDocStateDom);
                 (DD).apply(inner, patch);
             };
+
+            var stringifyDOM = function (dom) {
+                var hjson = Hyperjson.fromDOM(dom, isNotMagicLine, brFilter);
+                hjson[3] = {metadata: userList};
+                return stringify(hjson);
+            };
+
             var realtimeOptions = {
                 // provide initialstate...
                 initialState: stringifyDOM(inner) || '{}',
@@ -282,7 +290,6 @@ define([
                   addToUserList(userData);
                   hjson.pop();
                 }
-                return hjson;
             }
 
             var onRemote = realtimeOptions.onRemote = function (info) {
@@ -293,13 +300,10 @@ define([
                 // remember where the cursor is
                 cursor.update();
 
-                var hjson = updateUserList(shjson);
+                updateUserList(shjson);
 
                 // build a dom from HJSON, diff, and patch the editor
                 applyHjson(shjson);
-
-                // Build a new stringified Chainpad hyperjson without metadata to compare with the one build from the dom
-                shjson = stringify(hjson);
 
                 var shjson2 = stringifyDOM(inner);
                 if (shjson2 !== shjson) {
@@ -348,15 +352,9 @@ define([
             var onLocal = realtimeOptions.onLocal = function () {
                 if (initializing) { return; }
 
-                // serialize your DOM into an object
-                var hjson = Hyperjson.fromDOM(inner, isNotMagicLine, brFilter);
 
-                // append the userlist to the hyperjson structure
-                if(Object.keys(myData).length > 0) {
-                    hjson[3] = {metadata: userList};
-                }
                 // stringify the json and send it into chainpad
-                var shjson = stringify(hjson);
+                var shjson = stringifyDOM(inner);
                 module.patchText(shjson);
 
                 if (module.realtime.getUserDoc() !== shjson) {
