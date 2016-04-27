@@ -23,8 +23,9 @@ define([
     'RTWysiwyg_WebHome_cursor',
     'RTWysiwyg_WebHome_json_ot',
     'RTWysiwyg_WebHome_diffDOM',
+    'json.sortify',
     'jquery'
-], function (ErrorBox, Realtime, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom) {
+], function (ErrorBox, Realtime, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, DiffDom, JSONSortify) {
     // be very careful, dumping jquery as '$' into the global scope will break
     // prototype js bindings
     var $ = window.jQuery;
@@ -86,7 +87,7 @@ define([
         var disallowButtonHTML = ('<div class="rtwiki-allow-outerdiv">' +
             '<label class="rtwiki-allow-label" for="' + allowRealtimeCbId + '">' +
                 '<input type="checkbox" class="rtwiki-allow" id="' + allowRealtimeCbId + '" '+
-                    checked + ' />' + ' ' + Messages.allowRealtime + 
+                    checked + ' />' + ' ' + Messages.allowRealtime +
             '</label>' +
         '</div>');
 
@@ -133,7 +134,7 @@ define([
                 websocketURL: WebsocketURL,
                 userName: userName,
                 channel: channel,
-                initialState: JSON.stringify(Hyperjson.fromDOM(inner)),
+                initialState: JSONSortify(Hyperjson.fromDOM(inner)),
                 transformFunction: JsonOT.validate
             };
 
@@ -221,7 +222,7 @@ define([
 
                 applyHjson(parsed);
 
-                var userDoc2 = JSON.stringify(Hyperjson.fromDOM(inner));
+                var userDoc2 = JSONSortify(Hyperjson.fromDOM(inner));
                 if (userDoc !== userDoc2) {
                     console.error("userDoc !== userDoc2");
                     module.realtime.patchText(userDoc2);
@@ -296,7 +297,7 @@ define([
                 var hjson = Hyperjson.fromDOM(inner, isNotMagicLine, brFilter);
 
                 REALTIME_DEBUG.local.hjson = hjson;
-                var shjson = JSON.stringify(hjson);
+                var shjson = JSONSortify(hjson);
                 if (!realtime.patchText(shjson)) {
                     return;
                 }
@@ -318,7 +319,7 @@ define([
         var untilThen = function () {
             var $iframe = $('iframe');
             if (window.CKEDITOR &&
-                window.CKEDITOR.instances && 
+                window.CKEDITOR.instances &&
                 window.CKEDITOR.instances.content &&
                 $iframe.length &&
                 $iframe[0].contentWindow &&

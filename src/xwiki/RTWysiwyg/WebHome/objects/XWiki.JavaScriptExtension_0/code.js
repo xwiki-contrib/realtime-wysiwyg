@@ -22,6 +22,9 @@
         lag: "Lag:"
     };
     var PATHS = {
+        // JSON.sortify needs to use this name because the author doesn't understand AMD
+        'json.sortify': "$doc.getAttachmentURL('JSON.sortify.js')",
+
         RTWysiwyg_WebHome_chainpad: "$doc.getAttachmentURL('chainpad.js')",
         RTWysiwyg_WebHome_realtime_wysiwyg: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
         RTWysiwyg_WebHome_realtime_cleartext: "$doc.getAttachmentURL('realtime-cleartext.js')",
