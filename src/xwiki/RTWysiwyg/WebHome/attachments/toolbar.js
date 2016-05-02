@@ -1,5 +1,5 @@
 define([
-    'RTWysiwyg_WebHome_messages'
+    'RTFrontend_messages'
 ], function (Messages) {
 
     /** Id of the element for getting debug info. */

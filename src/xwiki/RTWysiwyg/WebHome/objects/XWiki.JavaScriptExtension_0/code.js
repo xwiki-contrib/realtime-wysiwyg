@@ -21,31 +21,36 @@
         debug: "Debug",
         lag: "Lag:"
     };
+    #set ($document = $xwiki.getDocument('RTFrontend.WebHome))
     var PATHS = {
-        RTWysiwyg_WebHome_chainpad: "$doc.getAttachmentURL('chainpad.js')",
         RTWysiwyg_WebHome_realtime_netflux: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
-        RTWysiwyg_WebHome_realtime_input: "$doc.getAttachmentURL('realtime-input.js')",
+        RT_toolbar: "$doc.getAttachmentURL('toolbar.js')",
+        RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false',
+        
+        RTFrontend_chainpad: "$document.getAttachmentURL('chainpad.js')",
+        RTFrontend_realtime_input: "$document.getAttachmentURL('realtime-input.js')",
 
-        // RTWysiwyg_WebHome_convert: "$doc.getAttachmentURL('convert.js')",
-        RTWysiwyg_WebHome_toolbar: "$doc.getAttachmentURL('toolbar.js')",
-        RTWysiwyg_WebHome_cursor: "$doc.getAttachmentURL('cursor.js')",
-        RTWysiwyg_WebHome_json_ot: "$doc.getAttachmentURL('json-ot.js')",
+        RTFrontend_saver: "$document.getAttachmentURL('saver.js')",
+        RTFrontend_interface: "$document.getAttachmentURL('interface.js')",
 
-        RTWysiwyg_WebHome_hyperjson: "$doc.getAttachmentURL('hyperjson.js')",
-        RTWysiwyg_WebHome_hyperscript: "$doc.getAttachmentURL('hyperscript.js')",
+        RTFrontend_cursor: "$document.getAttachmentURL('cursor.js')",
+        RTFrontend_json_ot: "$document.getAttachmentURL('json-ot.js')",
 
-        RTWysiwyg_WebHome_diffDOM: "$doc.getAttachmentURL('diffDOM.js')",
+        RTFrontend_hyperjson: "$document.getAttachmentURL('hyperjson.js')",
+        RTFrontend_hyperscript: "$document.getAttachmentURL('hyperscript.js')",
 
-        RTWysiwyg_WebHome_treesome: "$doc.getAttachmentURL('treesome.js')",
-        RTWysiwyg_WebHome_messages: "$doc.getAttachmentURL('messages.js')",
-        RTWysiwyg_WebHome_promises: "$doc.getAttachmentURL('es6-promise.min.js')",
-        'json.sortify': "$doc.getAttachmentURL('JSON.sortify.js')",
-        RTWysiwyg_WebHome_netflux: "$doc.getAttachmentURL('netflux-client.js')",
-        RTWysiwyg_WebHome_text_patcher: "$doc.getAttachmentURL('TextPatcher.js')",
-        RTWysiwyg_WebHome_tests: "$doc.getAttachmentURL('TypingTests.js')",
+        RTFrontend_diffDOM: "$document.getAttachmentURL('diffDOM.js')",
 
-        RTWysiwyg_WebHome_rangy: "$doc.getAttachmentURL('rangy-core.min.js')",
-        RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false'
+        RTFrontend_treesome: "$document.getAttachmentURL('treesome.js')",
+        RTFrontend_messages: "$document.getAttachmentURL('messages.js')",
+        RTFrontend_promises: "$document.getAttachmentURL('es6-promise.min.js')",
+        'json.sortify': "$document.getAttachmentURL('JSON.sortify.js')",
+        RTFrontend_netflux: "$document.getAttachmentURL('netflux-client.js')",
+        RTFrontend_text_patcher: "$document.getAttachmentURL('TextPatcher.js')",
+        RTFrontend_tests: "$document.getAttachmentURL('TypingTests.js')",
+        RTFrontend_rangy: "$document.getAttachmentURL('rangy-core.min.js')",
+
+        RTFrontend_GetKey: "$xwiki.getURL('RTFrontend.GetKey','jsx')"
     };
     #if("$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl" != "")
     var ISSUE_TRACKER_URL = "$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";

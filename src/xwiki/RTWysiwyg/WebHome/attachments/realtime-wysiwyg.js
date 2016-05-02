@@ -1,15 +1,15 @@
 define([
     'RTWysiwyg_ErrorBox',
-    'RTWysiwyg_WebHome_realtime_input',
-    'RTWysiwyg_WebHome_hyperjson',
-    'RTWysiwyg_WebHome_hyperscript',
-    'RTWysiwyg_WebHome_toolbar',
-    'RTWysiwyg_WebHome_cursor',
-    'RTWysiwyg_WebHome_json_ot',
-    'RTWysiwyg_WebHome_tests',
+    'RTFrontend_realtime_input',
+    'RTFrontend_hyperjson',
+    'RTFrontend_hyperscript',
+    'RT_toolbar',
+    'RTFrontend_cursor',
+    'RTFrontend_json_ot',
+    'RTFrontend_tests',
     'json.sortify',
-    'RTWysiwyg_WebHome_text_patcher',
-    'RTWysiwyg_WebHome_diffDOM',
+    'RTFrontend_text_patcher',
+    'RTFrontend_diffDOM',
     'jquery'
 ], function (ErrorBox, realtimeInput, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher) {
     var $ = window.jQuery;
