@@ -21,12 +21,12 @@
         debug: "Debug",
         lag: "Lag:"
     };
-    #set ($document = $xwiki.getDocument('RTFrontend.WebHome))
+    #set ($document = $xwiki.getDocument('RTFrontend.WebHome'))
     var PATHS = {
         RTWysiwyg_WebHome_realtime_netflux: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
         RT_toolbar: "$doc.getAttachmentURL('toolbar.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false',
-        
+
         RTFrontend_chainpad: "$document.getAttachmentURL('chainpad.js')",
         RTFrontend_realtime_input: "$document.getAttachmentURL('realtime-input.js')",
 
@@ -67,8 +67,13 @@
         return;
     }
 
-    //for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
-    for (var path in PATHS) { PATHS[path] = PATHS[path] + '?cb='+(new Date()).getTime(); }
+    var wiki = encodeURIComponent(XWiki.currentWiki);
+    var space = encodeURIComponent(XWiki.currentSpace);
+    var page = encodeURIComponent(XWiki.currentPage);
+    PATHS.RTFrontend_GetKey = PATHS.RTFrontend_GetKey.replace(/\.js$/, '')+'?minify=false&wiki=' + wiki + '&space=' + space + '&page=' + page;
+
+    for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
+    //for (var path in PATHS) { PATHS[path] = PATHS[path] + '?cb='+(new Date()).getTime(); }
     require.config({paths:PATHS});
 
     if (!window.XWiki) {
@@ -195,16 +200,18 @@
                 RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
                 // Begin : Add the issue tracker icon
               var untilThen = function () {
-                var $iframe = $('iframe');
+                var iframe = $('iframe');
                 if (window.CKEDITOR &&
                     window.CKEDITOR.instances &&
                     window.CKEDITOR.instances.content &&
-                    $iframe.length &&
-                    $iframe[0].contentWindow &&
-                    $iframe[0].contentWindow.body) {
+                    iframe.length &&
+                    iframe[0].contentWindow &&
+                    iframe[0].contentWindow.body) {
                     if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
                       $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
                     }
+
+                  });
                     // CKEditor seems to create IDs dynamically, and as such
                     // you cannot rely on IDs for removing buttons after launch
                     $('.cke_button__source').remove();
