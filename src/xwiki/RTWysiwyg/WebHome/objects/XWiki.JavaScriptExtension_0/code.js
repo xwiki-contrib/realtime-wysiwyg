@@ -19,12 +19,21 @@
         and: "and",
         editingWith: "Editing With:",
         debug: "Debug",
-        lag: "Lag:"
+        lag: "Lag:",
+        saved: "Saved: v{0}",
+        'merge overwrite': "Overwrote the realtime session's content with the latest saved state",
+        savedRemote: 'v{0} saved by {1}',
+        conflictResolved: 'merge conflict resolved remotely, now v{0}',
+        mergeDialog_prompt: "A change was made to the document outside of the realtime session, "+
+            "and the server had difficulty merging it with your version. "+
+            "How would you like to handle this?",
+        mergeDialog_keepRealtime: "Overwrite all changes with the current realtime version",
+        mergeDialog_keepRemote:   "Overwrite all changes with the current remote version"
     };
     #set ($document = $xwiki.getDocument('RTFrontend.WebHome'))
     var PATHS = {
         RTWysiwyg_WebHome_realtime_netflux: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
-        RT_toolbar: "$doc.getAttachmentURL('toolbar.js')",
+        RTWysiwyg_toolbar: "$doc.getAttachmentURL('toolbar.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false',
 
         RTFrontend_chainpad: "$document.getAttachmentURL('chainpad.js')",
@@ -141,6 +150,11 @@
             String(Math.random()).substring(2);
 
         return {
+            saverConfig: {
+                ajaxMergeUrl: "$xwiki.getURL('RTFrontend.Ajax','get')",
+                ajaxVersionUrl: "$xwiki.getURL('RTFrontend.Version','get')",
+                messages: MESSAGES
+            },
             websocketURL: WEBSOCKET_URL,
             userName: userName,
             language: language,
@@ -197,7 +211,7 @@
     var launchRealtime = function (config) {
         require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
             if (RTWysiwyg && RTWysiwyg.main) {
-                RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language);
+                RTWysiwyg.main(config.websocketURL, config.userName, MESSAGES, config.channel, DEMO_MODE, config.language, config.saverConfig);
                 // Begin : Add the issue tracker icon
               var untilThen = function () {
                 var iframe = $('iframe');
@@ -211,7 +225,6 @@
                       $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
                     }
 
-                  });
                     // CKEditor seems to create IDs dynamically, and as such
                     // you cannot rely on IDs for removing buttons after launch
                     $('.cke_button__source').remove();

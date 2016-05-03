@@ -260,6 +260,7 @@ define([
         }, 3000);
 
         return {
+            toolbar: toolbar,
             failed: function () {
                 connected = false;
                 userListElement.textContent = '';

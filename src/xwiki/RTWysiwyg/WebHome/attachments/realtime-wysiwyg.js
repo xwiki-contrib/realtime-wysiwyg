@@ -1,17 +1,19 @@
 define([
     'RTWysiwyg_ErrorBox',
+    'RTWysiwyg_toolbar',
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
     'RTFrontend_hyperscript',
-    'RT_toolbar',
     'RTFrontend_cursor',
     'RTFrontend_json_ot',
     'RTFrontend_tests',
     'json.sortify',
     'RTFrontend_text_patcher',
+    'RTFrontend_interface',
+    'RTFrontend_saver',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, realtimeInput, Hyperjson, Hyperscript, Toolbar, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -77,8 +79,7 @@ define([
         return stringify(Hyperjson.fromDOM(dom, isNotMagicLine, brFilter));
     };
 
-    var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language) {
-
+    var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language, saverConfig) {
         var key = '';
         var realtimeAllowed = function (bool) {
             if (typeof bool === 'undefined') {
@@ -131,6 +132,11 @@ define([
             console.log("Realtime is disallowed. Quitting");
             return;
         }
+
+        // configure Saver with the merge URL and language settings
+        saverConfig.ErrorBox = ErrorBox;
+        Saver.configure(saverConfig, language);
+
         var whenReady = function (editor, iframe) {
 
             var inner = iframe.contentWindow.body;
@@ -320,6 +326,32 @@ define([
                     // changeNameID: 'cryptpad-changeName'
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config);
+
+                Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
+                    .find('.rtwiki-toolbar-rightside'),
+                    saverConfig.messages);
+                Saver.setLastSavedContent(editor._.previousModeData);
+                var textConfig = {
+                  formId: "inline", // Id of the wiki page form
+                  isHTML: true, // If text content is HTML (Wysiwyg), it has to be converted before the merge
+                  setTextValue: function(newText, callback) {
+                    $.post('/xwiki/bin/get/CKEditor/HTMLConverter?xpage=plain&outputSyntax=plain', {
+                        convert: true,
+                        text: newText
+                    }).done(function(data) {
+                        var mydata = window.newDataCk = data
+                        var doc = (new DOMParser()).parseFromString(mydata,"text/html");
+                        inner.innerHTML = doc.body.innerHTML;
+                        callback();
+                    })
+                  },
+                  getTextValue: function() {
+                      var textContent = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>'+inner.innerHTML+'</body></html>';
+                      return textContent;
+                    },
+                  messages: saverConfig.messages
+                }
+                Saver.create(WebsocketURL, channel+"events", info.realtime, textConfig, DEMO_MODE);
             };
 
             var onReady = realtimeOptions.onReady = function (info) {
@@ -356,6 +388,8 @@ define([
                 // stringify the json and send it into chainpad
                 var shjson = stringifyDOM(inner);
                 module.patchText(shjson);
+
+                Saver.setLocalEditFlag(true);
 
                 if (module.realtime.getUserDoc() !== shjson) {
                     console.error("realtime.getUserDoc() !== shjson");
