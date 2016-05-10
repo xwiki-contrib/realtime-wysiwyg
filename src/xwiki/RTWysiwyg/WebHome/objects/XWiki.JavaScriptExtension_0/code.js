@@ -79,7 +79,7 @@ require([path], function(Loader) {
         Loader.checkSessions();
     } else if ((!realtimeDisallowed() && usingCK()) || config.DEMO_MODE) {
         var config = Loader.getConfig();
-        Loader.getKeys(['rtwysiwyg', 'events'], function(keys) {
+        Loader.getKeys(['rtwysiwyg', 'events_rtwysiwyg'], function(keys) {
             launchRealtime(config, keys);
         });
     }

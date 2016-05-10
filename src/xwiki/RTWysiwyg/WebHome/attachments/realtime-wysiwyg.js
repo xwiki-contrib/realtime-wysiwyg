@@ -89,7 +89,7 @@ define([
         var LOCALSTORAGE_DISALLOW = editorConfig.LOCALSTORAGE_DISALLOW;
 
         var channel = docKeys.rtwysiwyg;
-        var eventsChannel = docKeys.events;
+        var eventsChannel = docKeys.events_rtwysiwyg;
 
         // TOOLBAR style
         var TOOLBAR_CLS = Toolbar.TOOLBAR_CLS;
