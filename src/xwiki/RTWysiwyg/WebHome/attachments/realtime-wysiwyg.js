@@ -1,6 +1,6 @@
 define([
     'RTWysiwyg_ErrorBox',
-    'RTWysiwyg_toolbar',
+    'RTFrontend_toolbar',
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
     'RTFrontend_hyperscript',
@@ -45,9 +45,6 @@ define([
         return Hyperjson.callOn(H, Hyperscript);
     };
 
-    /** Key in the localStore which indicates realtime activity should be disallowed. */
-    var LOCALSTORAGE_DISALLOW = 'rtwysiwyg-disallow';
-
     var module = window.REALTIME_MODULE = {
         Hyperjson: Hyperjson,
         Hyperscript: Hyperscript
@@ -79,8 +76,65 @@ define([
         return stringify(Hyperjson.fromDOM(dom, isNotMagicLine, brFilter));
     };
 
-    var main = module.main = function (WebsocketURL, userName, Messages, channel, DEMO_MODE, language, saverConfig) {
-        var key = '';
+    var main = module.main = function (editorConfig, docKeys) {
+
+        var WebsocketURL = editorConfig.WebsocketURL;
+        var userName = editorConfig.userName;
+        var DEMO_MODE = editorConfig.DEMO_MODE;
+        var language = editorConfig.language;
+        var saverConfig = editorConfig.saverConfig || {};
+        var Messages = saverConfig.messages || {};
+
+        /** Key in the localStore which indicates realtime activity should be disallowed. */
+        var LOCALSTORAGE_DISALLOW = editorConfig.LOCALSTORAGE_DISALLOW;
+
+        var channel = docKeys.rtwysiwyg;
+        var eventsChannel = docKeys.events;
+
+        // TOOLBAR style
+        var TOOLBAR_CLS = Toolbar.TOOLBAR_CLS;
+        var DEBUG_LINK_CLS = Toolbar.DEBUG_LINK_CLS;
+        var toolbar_style = [
+            '<style>',
+            '.' + TOOLBAR_CLS + ' {',
+            '    color: #666;',
+            '    font-weight: bold;',
+//            '    background-color: #f0f0ee;',
+//            '    border-bottom: 1px solid #DDD;',
+//            '    border-top: 3px solid #CCC;',
+//            '    border-right: 2px solid #CCC;',
+//            '    border-left: 2px solid #CCC;',
+            '    height: 26px;',
+            '    margin-bottom: -3px;',
+            '    display: inline-block;',
+            '    width: 100%;',
+            '}',
+            '.' + TOOLBAR_CLS + ' a {',
+            '    float: right;',
+            '}',
+            '.' + TOOLBAR_CLS + ' div {',
+            '    padding: 0 10px;',
+            '    height: 1.5em;',
+//            '    background: #f0f0ee;',
+            '    line-height: 25px;',
+            '    height: 22px;',
+            '}',
+            '.' + TOOLBAR_CLS + ' div.rt-back {',
+            '    padding: 0;',
+            '    font-weight: bold;',
+            '    cursor: pointer;',
+            '    color: #000;',
+            '}',
+            '.gwt-TabBar {',
+            '    display:none;',
+            '}',
+            '.' + DEBUG_LINK_CLS + ':link { color:transparent; }',
+            '.' + DEBUG_LINK_CLS + ':link:hover { color:blue; }',
+            '.gwt-TabPanelBottom { border-top: 0 none; }',
+            '</style>'
+        ];
+        // END TOOLBAR style
+
         var realtimeAllowed = function (bool) {
             if (typeof bool === 'undefined') {
                 var disallow = localStorage.getItem(LOCALSTORAGE_DISALLOW);
@@ -273,10 +327,6 @@ define([
                 // the channel we will communicate over
                 channel: channel,
 
-                // our encryption key
-                cryptKey: key,
-
-
                 // method which allows us to get the id of the user
                 setMyID: setMyID,
 
@@ -325,7 +375,7 @@ define([
                     userData: userList
                     // changeNameID: 'cryptpad-changeName'
                 };
-                toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config);
+                toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
 
                 Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
                     .find('.rtwiki-toolbar-rightside'),
@@ -351,7 +401,7 @@ define([
                     },
                   messages: saverConfig.messages
                 }
-                Saver.create(WebsocketURL, channel+"events", info.realtime, textConfig, DEMO_MODE);
+                Saver.create(info.network, eventsChannel, info.realtime, textConfig, DEMO_MODE);
             };
 
             var onReady = realtimeOptions.onReady = function (info) {
