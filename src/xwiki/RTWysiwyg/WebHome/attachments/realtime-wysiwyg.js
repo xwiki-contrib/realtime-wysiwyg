@@ -135,57 +135,37 @@ define([
         ];
         // END TOOLBAR style
 
-        var realtimeAllowed = function (bool) {
-            if (typeof bool === 'undefined') {
-                var disallow = localStorage.getItem(LOCALSTORAGE_DISALLOW);
-                if (disallow) {
-                    return false;
-                } else {
-                    return true;
-                }
-            } else {
-                localStorage.setItem(LOCALSTORAGE_DISALLOW, bool? '' : 1);
-                return bool;
-            }
-        };
-
+        // DISALLOW REALTIME
+        var uid = Interface.uid;
         var allowRealtimeCbId = uid();
+        Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
+        var checked = (Interface.realtimeAllowed()? 'checked="checked"' : '');
 
-        var checked = (realtimeAllowed()? 'checked' : '');
-
-        var disallowButtonHTML = ('<div class="rtwiki-allow-outerdiv">' +
-            '<label class="rtwiki-allow-label" for="' + allowRealtimeCbId + '">' +
-                '<input type="checkbox" class="rtwiki-allow" id="' + allowRealtimeCbId + '" '+
-                    checked + ' />' + ' ' + Messages.allowRealtime +
-            '</label>' +
-        '</div>');
-
-        var $editButtons = $('.buttons');
-
-        console.log("Creating realtime toggle");
-        $editButtons.append(disallowButtonHTML);
+        Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
+        // hide the toggle for autosaving while in realtime because it
+        // conflicts with our own autosaving system
+        Interface.setAutosaveHiddenState(true);
 
         var $disallowButton = $('#' + allowRealtimeCbId);
-
         var disallowClick = function () {
             var checked = $disallowButton[0].checked;
-            console.log("Value of 'allow realtime collaboration' is %s", checked);
+            //console.log("Value of 'allow realtime collaboration' is %s", checked);
             if (checked || DEMO_MODE) {
-                realtimeAllowed(true);
-
+                Interface.realtimeAllowed(true);
+                // TODO : join the RT session without reloading the page?
                 window.location.reload();
             } else {
-                realtimeAllowed(false);
+                Interface.realtimeAllowed(false);
                 module.abortRealtime();
             }
         };
-
         $disallowButton.on('change', disallowClick);
 
-        if (!realtimeAllowed()) {
+        if (!Interface.realtimeAllowed()) {
             console.log("Realtime is disallowed. Quitting");
             return;
         }
+        // END DISALLOW REALTIME
 
         // configure Saver with the merge URL and language settings
         saverConfig.ErrorBox = ErrorBox;
@@ -405,14 +385,13 @@ define([
             };
 
             var onReady = realtimeOptions.onReady = function (info) {
+                var realtime = module.realtime = info.realtime;
+                module.leaveChannel = info.leave;
                 module.patchText = TextPatcher.create({
-                    realtime: info.realtime,
+                    realtime: realtime,
                     logging: false,
                 });
-
-                module.realtime = info.realtime;
-
-                var shjson = info.realtime.getUserDoc();
+                var shjson = realtime.getUserDoc();
 
                 // Update the user list to link the wiki name to the user id
                 updateUserList(shjson);
@@ -422,13 +401,14 @@ define([
                 console.log("Unlocking editor");
                 initializing = false;
                 setEditable(true);
+                onLocal();
             };
 
             var onAbort = realtimeOptions.onAbort = function (info) {
-                console.log("Aborting the session!");
+                   onLocal();Aborting the session!");
                 // TODO inform them that the session was torn down
                 toolbar.failed();
-                toolbar.destroy();
+                toolbar.toolbar.remove();
             };
 
             var onLocal = realtimeOptions.onLocal = function () {
@@ -449,6 +429,8 @@ define([
             var rti = module.realtimeInput = realtimeInput.start(realtimeOptions);
             module.abortRealtime = function () {
                 module.realtime.abort();
+                module.leaveChannel();
+                onAbort();
             };
 
             /* hitting enter makes a new line, but places the cursor inside

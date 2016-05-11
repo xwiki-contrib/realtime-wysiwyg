@@ -77,7 +77,7 @@ require([path], function(Loader) {
     if (lock) {
         // found a lock link : check active sessions
         Loader.checkSessions();
-    } else if ((!realtimeDisallowed() && usingCK()) || config.DEMO_MODE) {
+    } else if (usingCK() || config.DEMO_MODE) {
         var config = Loader.getConfig();
         Loader.getKeys(['rtwysiwyg', 'events_rtwysiwyg'], function(keys) {
             launchRealtime(config, keys);
