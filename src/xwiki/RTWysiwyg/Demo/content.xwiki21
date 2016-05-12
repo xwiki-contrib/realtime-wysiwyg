@@ -1,0 +1,4 @@
+{{velocity output=false}}
+#set ($discard = $xwiki.jsx.use("RTWysiwyg.WebHome", {"demoMode":true}))
+{{/velocity}}
+Realtime Wysiwyg!
