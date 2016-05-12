@@ -357,30 +357,32 @@ define([
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
 
-                Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
-                    .find('.rtwiki-toolbar-rightside'),
-                    saverConfig.messages);
-                Saver.setLastSavedContent(editor._.previousModeData);
-                var textConfig = {
-                  formId: "inline", // Id of the wiki page form
-                  isHTML: true, // If text content is HTML (Wysiwyg), it has to be converted before the merge
-                  setTextValue: function(newText, callback) {
-                    $.post('/xwiki/bin/get/CKEditor/HTMLConverter?xpage=plain&outputSyntax=plain', {
-                        convert: true,
-                        text: newText
-                    }).done(function(data) {
-                        var mydata = window.newDataCk = data
-                        var doc = (new DOMParser()).parseFromString(mydata,"text/html");
-                        inner.innerHTML = doc.body.innerHTML;
-                        callback();
-                    })
-                  },
-                  getTextValue: function() {
-                      return editor.getData();
-                    },
-                  messages: saverConfig.messages
+                if(!DEMO_MODE) {
+                    Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
+                        .find('.rtwiki-toolbar-rightside'),
+                        saverConfig.messages);
+                    Saver.setLastSavedContent(editor._.previousModeData);
+                    var textConfig = {
+                      formId: "inline", // Id of the wiki page form
+                      isHTML: true, // If text content is HTML (Wysiwyg), it has to be converted before the merge
+                      setTextValue: function(newText, callback) {
+                        $.post('/xwiki/bin/get/CKEditor/HTMLConverter?xpage=plain&outputSyntax=plain', {
+                            convert: true,
+                            text: newText
+                        }).done(function(data) {
+                            var mydata = window.newDataCk = data
+                            var doc = (new DOMParser()).parseFromString(mydata,"text/html");
+                            inner.innerHTML = doc.body.innerHTML;
+                            callback();
+                        })
+                      },
+                      getTextValue: function() {
+                          return editor.getData();
+                        },
+                      messages: saverConfig.messages
+                    }
+                    Saver.create(info.network, eventsChannel, info.realtime, textConfig, DEMO_MODE);
                 }
-                Saver.create(info.network, eventsChannel, info.realtime, textConfig, DEMO_MODE);
             };
 
             var onReady = realtimeOptions.onReady = function (info) {

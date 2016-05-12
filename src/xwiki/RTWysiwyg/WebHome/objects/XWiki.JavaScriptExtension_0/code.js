@@ -1,8 +1,11 @@
-var path = "$xwiki.getURL('RTFrontend.LoadEditors','jsx')" + '?minify=false';
+var DEMO_MODE = "$!request.getParameter('demoMode')" || false;
+DEMO_MODE = (DEMO_MODE === true || DEMO_MODE === "true") ? true : false;
+var path = "$xwiki.getURL('RTFrontend.LoadEditors','jsx')" + '?minify=false&demoMode='+DEMO_MODE;
 require([path], function(Loader) {
     // VELOCITY
+    #set ($document = $xwiki.getDocument('RTWysiwyg.WebHome'))
     var PATHS = {
-        RTWysiwyg_WebHome_realtime_netflux: "$doc.getAttachmentURL('realtime-wysiwyg.js')",
+        RTWysiwyg_WebHome_realtime_netflux: "$document.getAttachmentURL('realtime-wysiwyg.js')",
         RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false',
     };
     #if("$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl" != "")
@@ -77,7 +80,7 @@ require([path], function(Loader) {
     if (lock) {
         // found a lock link : check active sessions
         Loader.checkSessions();
-    } else if (usingCK() || config.DEMO_MODE) {
+    } else if (usingCK() || DEMO_MODE) {
         var config = Loader.getConfig();
         Loader.getKeys(['rtwysiwyg', 'events_rtwysiwyg'], function(keys) {
             launchRealtime(config, keys);
