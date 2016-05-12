@@ -376,8 +376,7 @@ define([
                     })
                   },
                   getTextValue: function() {
-                      var textContent = '<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml"><body>'+inner.innerHTML+'</body></html>';
-                      return textContent;
+                      return editor.getData();
                     },
                   messages: saverConfig.messages
                 }
@@ -405,7 +404,7 @@ define([
             };
 
             var onAbort = realtimeOptions.onAbort = function (info) {
-                   onLocal();Aborting the session!");
+                console.log("Aborting the session!");
                 // TODO inform them that the session was torn down
                 toolbar.failed();
                 toolbar.toolbar.remove();
@@ -413,7 +412,6 @@ define([
 
             var onLocal = realtimeOptions.onLocal = function () {
                 if (initializing) { return; }
-
 
                 // stringify the json and send it into chainpad
                 var shjson = stringifyDOM(inner);
