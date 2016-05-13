@@ -1,4 +1,5 @@
 define([
+    'RTFrontend_errorbox',
     'RTFrontend_toolbar',
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
@@ -13,7 +14,7 @@ define([
     'RTFrontend_chainpad',
     'RTFrontend_diffDOM',
     'jquery'
-], function (Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -411,6 +412,7 @@ define([
                 // TODO inform them that the session was torn down
                 toolbar.failed();
                 toolbar.toolbar.remove();
+                ErrorBox.show('disconnected');
             };
 
             var onLocal = realtimeOptions.onLocal = function () {
