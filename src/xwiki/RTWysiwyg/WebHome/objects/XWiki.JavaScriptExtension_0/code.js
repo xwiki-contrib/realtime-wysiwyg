@@ -82,7 +82,7 @@ require([path], function(Loader) {
         Loader.checkSessions();
     } else if (usingCK() || config.DEMO_MODE) {
         var config = Loader.getConfig();
-        Loader.getKeys(['rtwysiwyg', 'events_rtwysiwyg'], function(keys) {
+        Loader.getKeys(['rtwysiwyg', 'events'], function(keys) {
             launchRealtime(config, keys);
         });
     }

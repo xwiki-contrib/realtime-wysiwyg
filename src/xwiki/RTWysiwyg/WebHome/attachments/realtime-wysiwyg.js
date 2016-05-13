@@ -11,9 +11,10 @@ define([
     'RTFrontend_text_patcher',
     'RTFrontend_interface',
     'RTFrontend_saver',
+    'RTFrontend_chainpad',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -83,13 +84,16 @@ define([
         var DEMO_MODE = editorConfig.DEMO_MODE;
         var language = editorConfig.language;
         var saverConfig = editorConfig.saverConfig || {};
+        saverConfig.chainpad = Chainpad;
+        saverConfig.editorType = 'rtwywisyg';
+        saverConfig.language = language;
         var Messages = saverConfig.messages || {};
 
         /** Key in the localStore which indicates realtime activity should be disallowed. */
         var LOCALSTORAGE_DISALLOW = editorConfig.LOCALSTORAGE_DISALLOW;
 
         var channel = docKeys.rtwysiwyg;
-        var eventsChannel = docKeys.events_rtwysiwyg;
+        var eventsChannel = docKeys.events;
 
         // TOOLBAR style
         var TOOLBAR_CLS = Toolbar.TOOLBAR_CLS;
@@ -364,7 +368,6 @@ define([
                     Saver.setLastSavedContent(editor._.previousModeData);
                     var textConfig = {
                       formId: "inline", // Id of the wiki page form
-                      isHTML: true, // If text content is HTML (Wysiwyg), it has to be converted before the merge
                       setTextValue: function(newText, callback) {
                         $.post('/xwiki/bin/get/CKEditor/HTMLConverter?xpage=plain&outputSyntax=plain', {
                             convert: true,
