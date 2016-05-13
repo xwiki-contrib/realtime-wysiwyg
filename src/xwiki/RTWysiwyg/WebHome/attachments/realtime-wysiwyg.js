@@ -1,5 +1,4 @@
 define([
-    'RTWysiwyg_ErrorBox',
     'RTFrontend_toolbar',
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
@@ -14,7 +13,7 @@ define([
     'RTFrontend_chainpad',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
+], function (Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -172,8 +171,7 @@ define([
         // END DISALLOW REALTIME
 
         // configure Saver with the merge URL and language settings
-        saverConfig.ErrorBox = ErrorBox;
-        Saver.configure(saverConfig, language);
+        Saver.configure(saverConfig);
 
         var whenReady = function (editor, iframe) {
 

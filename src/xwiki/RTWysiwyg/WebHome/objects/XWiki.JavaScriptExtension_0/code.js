@@ -6,7 +6,6 @@ require([path], function(Loader) {
     #set ($document = $xwiki.getDocument('RTWysiwyg.WebHome'))
     var PATHS = {
         RTWysiwyg_WebHome_realtime_netflux: "$document.getAttachmentURL('realtime-wysiwyg.js')",
-        RTWysiwyg_ErrorBox: "$xwiki.getURL('RTWysiwyg.ErrorBox','jsx')" + '?minify=false',
     };
     #if("$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl" != "")
     var ISSUE_TRACKER_URL = "$!doc.getObject('RTWysiwyg.ConfigurationClass').issueTrackerUrl";
