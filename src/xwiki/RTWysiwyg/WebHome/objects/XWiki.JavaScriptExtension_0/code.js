@@ -74,7 +74,7 @@ require([path], function(Loader) {
     var config = Loader.getConfig();
 
     var realtimeDisallowed = function () {
-        return localStorage.getItem(config.LOCALSTORAGE_DISALLOW)?  true: false;
+        return localStorage.getItem(config.LOCALSTORAGE_DISALLOW) ? true: false;
     };
 
     if (lock) {
@@ -83,7 +83,20 @@ require([path], function(Loader) {
     } else if (usingCK() || config.DEMO_MODE) {
         var config = Loader.getConfig();
         Loader.getKeys(['rtwysiwyg', 'events'], function(keys) {
-            launchRealtime(config, keys);
+            if(keys.rtwysiwyg && keys.events) {
+                launchRealtime(config, keys);
+            }
+            else {
+                var type = (Object.keys(keys).length === 1) ? Object.keys(keys)[0] : null;
+                if(type) {
+                    Loader.displayModal(type);
+                    console.error("You are not allowed to create a new realtime session for that document. Active session : "+Object.keys(keys));
+                    console.log("Join that realtime editor if you want to edit this document");
+                }
+                else {
+                    console.error("You are not allowed to create a new realtime session for that document.");
+                }
+            }
         });
     }
 });

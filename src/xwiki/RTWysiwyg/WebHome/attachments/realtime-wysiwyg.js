@@ -85,7 +85,7 @@ define([
         var language = editorConfig.language;
         var saverConfig = editorConfig.saverConfig || {};
         saverConfig.chainpad = Chainpad;
-        saverConfig.editorType = 'rtwywisyg';
+        saverConfig.editorType = 'rtwysiwyg';
         saverConfig.language = language;
         var Messages = saverConfig.messages || {};
 
