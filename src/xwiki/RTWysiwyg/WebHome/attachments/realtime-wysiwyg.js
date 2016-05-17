@@ -27,6 +27,9 @@ define([
         Hyperscript: Hyperscript,
         Hyperjson: Hyperjson
     };
+    var wiki = encodeURIComponent(XWiki.currentWiki);
+    var space = encodeURIComponent(XWiki.currentSpace);
+    var page = encodeURIComponent(XWiki.currentPage);
 
     // Create a fake "Crypto" object which will be passed to realtime-input
     var Crypto = {
@@ -82,6 +85,7 @@ define([
     var main = module.main = function (editorConfig, docKeys) {
 
         var WebsocketURL = editorConfig.WebsocketURL;
+        var htmlConverterUrl = editorConfig.htmlConverterUrl;
         var userName = editorConfig.userName;
         var DEMO_MODE = editorConfig.DEMO_MODE;
         var language = editorConfig.language;
@@ -370,7 +374,10 @@ define([
                     var textConfig = {
                       formId: "inline", // Id of the wiki page form
                       setTextValue: function(newText, callback) {
-                        $.post('/xwiki/bin/get/CKEditor/HTMLConverter?xpage=plain&outputSyntax=plain', {
+                        $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', {
+                            wiki: wiki,
+                            space: space,
+                            page: page,
                             convert: true,
                             text: newText
                         }).done(function(data) {
