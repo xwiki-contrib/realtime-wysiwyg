@@ -71,18 +71,13 @@ require([path, pathErrorBox], function(Loader, ErrorBox) {
     };
     var lock = getDocLock();
 
-    var config = Loader.getConfig();
-
-    var realtimeDisallowed = function () {
-        return localStorage.getItem(config.LOCALSTORAGE_DISALLOW) ? true: false;
-    };
-
     if (lock) {
         // found a lock link : check active sessions
         Loader.checkSessions();
-    } else if (usingCK() || config.DEMO_MODE) {
-        var config = Loader.getConfig();
+    } else if (usingCK() || DEMO_MODE) {
         Loader.getKeys(['rtwysiwyg', 'events'], function(keys) {
+            var config = Loader.getConfig();
+
             if(keys.rtwysiwyg && keys.events) {
                 launchRealtime(config, keys);
             }

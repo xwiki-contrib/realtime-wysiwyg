@@ -381,8 +381,13 @@ define([
                             text: newText
                         }).done(function(data) {
                             var mydata = window.newDataCk = data
-                            var doc = (new DOMParser()).parseFromString(mydata,"text/html");
-                            inner.innerHTML = doc.body.innerHTML;
+                            var doc = window.DOMDoc = (new DOMParser()).parseFromString(mydata,"text/html");
+  
+                            cursor.update();
+                            doc.body.setAttribute("contenteditable", "true"); // lol wtf
+                            var patch = (DD).diff(inner, doc.body);
+                            (DD).apply(inner, patch);
+
                             callback();
                         })
                       },
