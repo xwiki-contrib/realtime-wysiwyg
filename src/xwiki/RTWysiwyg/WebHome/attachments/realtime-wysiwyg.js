@@ -92,7 +92,6 @@ define([
         var saverConfig = editorConfig.saverConfig || {};
         saverConfig.chainpad = Chainpad;
         saverConfig.editorType = 'rtwysiwyg';
-        saverConfig.language = language;
         var Messages = saverConfig.messages || {};
 
         /** Key in the localStore which indicates realtime activity should be disallowed. */
@@ -421,7 +420,9 @@ define([
                 // TODO inform them that the session was torn down
                 toolbar.failed();
                 toolbar.toolbar.remove();
-                ErrorBox.show('disconnected');
+                if($disallowButton[0].checked && !module.aborted) {
+                    ErrorBox.show('disconnected');
+                }
             };
 
             var onLocal = realtimeOptions.onLocal = function () {
@@ -442,6 +443,7 @@ define([
             module.abortRealtime = function () {
                 module.realtime.abort();
                 module.leaveChannel();
+                module.aborted = true;
                 onAbort();
             };
 
