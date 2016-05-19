@@ -75,9 +75,19 @@ require([path, pathErrorBox], function(Loader, ErrorBox) {
         // found a lock link : check active sessions
         Loader.checkSessions();
     } else if (usingCK() || DEMO_MODE) {
-        Loader.getKeys(['rtwysiwyg', 'events'], function(keys) {
-            var config = Loader.getConfig();
-
+        var config = Loader.getConfig();
+        var keysData = [
+            {doc: config.reference, mod: config.language+'/events', editor: "1.0"},
+            {doc: config.reference, mod: config.language+'/content', editor: "rtwysiwyg"}
+        ];
+        Loader.getKeys(keysData, function(keysResultDoc) {
+            var keys = {};
+            var keysResult = keysResultDoc[config.reference];
+            if(keysResult[config.language+'/events'] && keysResult[config.language+'/events']["1.0"] &&
+               keysResult[config.language+'/content'] && keysResult[config.language+'/content']["rtwysiwyg"]) {
+                keys.rtwysiwyg = keysResult[config.language+'/content']["rtwysiwyg"].key;
+                keys.events = keysResult[config.language+'/events']["1.0"].key;
+            }
             if(keys.rtwysiwyg && keys.events) {
                 launchRealtime(config, keys);
             }

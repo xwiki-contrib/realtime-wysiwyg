@@ -382,7 +382,7 @@ define([
                         }).done(function(data) {
                             var mydata = window.newDataCk = data
                             var doc = window.DOMDoc = (new DOMParser()).parseFromString(mydata,"text/html");
-  
+
                             cursor.update();
                             doc.body.setAttribute("contenteditable", "true"); // lol wtf
                             var patch = (DD).diff(inner, doc.body);
