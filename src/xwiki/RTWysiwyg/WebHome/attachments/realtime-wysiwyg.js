@@ -437,8 +437,6 @@ define([
                 var shjson = stringifyDOM(inner);
                 module.patchText(shjson);
 
-                Saver.setLocalEditFlag(true);
-
                 if (module.realtime.getUserDoc() !== shjson) {
                     console.error("realtime.getUserDoc() !== shjson");
                 }
@@ -461,7 +459,11 @@ define([
                 the first such keypress will not be inserted into the P. */
             inner.addEventListener('keydown', cursor.brFix);
 
-            editor.on('change', onLocal);
+            editor.on('change', function() {
+                console.log('LOCAL CHANGES');
+                Saver.setLocalEditFlag(true);
+                onLocal();
+            });
 
             // export the typing tests to the window.
             // call like `test = easyTest()`

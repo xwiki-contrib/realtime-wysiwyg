@@ -72,7 +72,7 @@ require([path, pathErrorBox], function(Loader, ErrorBox) {
     var lock = getDocLock();
 
     var info = {
-        type: 'rtwyiwyg',
+        type: 'rtwysiwyg',
         href: '&editor=inline&sheet=CKEditor.EditSheet&force=1',
         name: "WYSIWYG"
     };
