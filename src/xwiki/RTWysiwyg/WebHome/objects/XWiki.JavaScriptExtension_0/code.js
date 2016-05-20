@@ -71,9 +71,15 @@ require([path, pathErrorBox], function(Loader, ErrorBox) {
     };
     var lock = getDocLock();
 
+    var info = {
+        type: 'rtwyiwyg',
+        href: '&editor=inline&sheet=CKEditor.EditSheet&force=1',
+        name: "WYSIWYG"
+    };
+
     if (lock) {
         // found a lock link : check active sessions
-        Loader.checkSessions();
+        Loader.checkSessions(info);
     } else if (usingCK() || DEMO_MODE) {
         var config = Loader.getConfig();
         var keysData = [
@@ -94,7 +100,7 @@ require([path, pathErrorBox], function(Loader, ErrorBox) {
             else {
                 var type = (Object.keys(keys).length === 1) ? Object.keys(keys)[0] : null;
                 if(type) {
-                    Loader.displayModal(type);
+                    Loader.displayModal(type, info);
                     console.error("You are not allowed to create a new realtime session for that document. Active session : "+Object.keys(keys));
                     console.log("Join that realtime editor if you want to edit this document");
                 }
