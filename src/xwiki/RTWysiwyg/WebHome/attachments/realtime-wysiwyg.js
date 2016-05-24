@@ -92,6 +92,9 @@ define([
         var saverConfig = editorConfig.saverConfig || {};
         saverConfig.chainpad = Chainpad;
         saverConfig.editorType = 'rtwysiwyg';
+        saverConfig.editorName = 'Wysiwyg';
+        saverConfig.isHTML = true;
+        saverConfig.mergeContent = true;
         var Messages = saverConfig.messages || {};
 
         /** Key in the localStore which indicates realtime activity should be disallowed. */
@@ -370,33 +373,51 @@ define([
                         .find('.rt-toolbar-rightside'),
                         saverConfig.messages);
                     Saver.setLastSavedContent(editor._.previousModeData);
-                    var textConfig = {
-                      formId: "inline", // Id of the wiki page form
-                      setTextValue: function(newText, callback) {
-                        $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', {
-                            wiki: wiki,
-                            space: space,
-                            page: page,
-                            convert: true,
-                            text: newText
-                        }).done(function(data) {
-                            var mydata = window.newDataCk = data
-                            var doc = window.DOMDoc = (new DOMParser()).parseFromString(mydata,"text/html");
+                    var saverCreateConfig = {
+                        formId: "inline", // Id of the wiki page form
+                        setTextValue: function(newText, toConvert, callback) {
+                            if (toConvert) {
+                                $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', {
+                                    wiki: wiki,
+                                    space: space,
+                                    page: page,
+                                    convert: true,
+                                    text: newText
+                                }).done(function(data) {
+                                    var mydata = window.newDataCk = data
+                                    var doc = window.DOMDoc = (new DOMParser()).parseFromString(mydata,"text/html");
 
-                            cursor.update();
-                            doc.body.setAttribute("contenteditable", "true"); // lol wtf
-                            var patch = (DD).diff(inner, doc.body);
-                            (DD).apply(inner, patch);
+                                    cursor.update();
+                                    doc.body.setAttribute("contenteditable", "true");
+                                    var patch = (DD).diff(inner, doc.body);
+                                    (DD).apply(inner, patch);
 
-                            callback();
-                        })
-                      },
-                      getTextValue: function() {
-                          return editor.getData();
+                                    callback();
+                                    onLocal();
+                                });
+                            } else {
+                                var doc = window.DOMDoc = (new DOMParser()).parseFromString(newText,"text/html");
+
+                                cursor.update();
+                                doc.body.setAttribute("contenteditable", "true");
+                                var patch = (DD).diff(inner, doc.body);
+                                (DD).apply(inner, patch);
+
+                                callback();
+                                onLocal();
+                            }
                         },
-                      messages: saverConfig.messages
-                    }
-                    Saver.create(info.network, eventsChannel, info.realtime, textConfig, userList, DEMO_MODE);
+                        getTextValue: function() {
+                            return editor.getData();
+                        },
+                        realtime: info.realtime,
+                        userList: info.userList,
+                        userName: userName,
+                        network: info.network,
+                        channel: eventsChannel,
+                        demoMode: DEMO_MODE
+                    };
+                    Saver.create(saverCreateConfig);
                 }
             };
 
@@ -460,7 +481,7 @@ define([
             inner.addEventListener('keydown', cursor.brFix);
 
             editor.on('change', function() {
-                console.log('LOCAL CHANGES');
+                Saver.destroyDialog();
                 Saver.setLocalEditFlag(true);
                 onLocal();
             });

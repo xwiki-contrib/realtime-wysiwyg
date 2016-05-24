@@ -1,8 +1,13 @@
+(function() {
 var DEMO_MODE = "$!request.getParameter('demoMode')" || false;
 DEMO_MODE = (DEMO_MODE === true || DEMO_MODE === "true") ? true : false;
+// Not in edit mode?
+if (!DEMO_MODE && window.XWiki.contextaction !== 'edit') { return false; }
+console.log('wysiwyg');
 var path = "$xwiki.getURL('RTFrontend.LoadEditors','jsx')" + '?minify=false&demoMode='+DEMO_MODE;
 var pathErrorBox = "$xwiki.getURL('RTFrontend.ErrorBox','jsx')" + '?';
 require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
+    if(!Loader) { return; }
     // VELOCITY
     #set ($document = $xwiki.getDocument('RTWysiwyg.WebHome'))
     var PATHS = {
@@ -165,3 +170,4 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     displayButtonModal();
     $(document).on('insertButton', displayButtonModal);
 });
+})();
