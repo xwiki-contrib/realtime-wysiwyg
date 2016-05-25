@@ -407,6 +407,13 @@ define([
                                 onLocal();
                             }
                         },
+                        getSaveValue: function() {
+                            return Object.toQueryString({
+                              content: editor.getData(),
+                              RequiresHTMLConversion: "content",
+                              content_syntax: "xwiki/2.1"
+                            });
+                        },
                         getTextValue: function() {
                             return editor.getData();
                         },
