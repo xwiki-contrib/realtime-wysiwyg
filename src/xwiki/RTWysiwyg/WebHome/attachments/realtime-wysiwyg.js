@@ -338,36 +338,7 @@ define([
                   hjson.pop();
                 }
             }
-
-            var onRemote = realtimeOptions.onRemote = function (info) {
-                if (initializing) { return; }
-
-                var shjson = info.realtime.getUserDoc();
-
-                // remember where the cursor is
-                cursor.update();
-
-                updateUserList(shjson);
-
-                // build a dom from HJSON, diff, and patch the editor
-                applyHjson(shjson);
-
-                var shjson2 = stringifyDOM(inner);
-                if (shjson2 !== shjson) {
-                    console.error("shjson2 !== shjson");
-                    module.patchText(shjson2);
-                }
-            };
-
-            var onInit = realtimeOptions.onInit = function (info) {
-                var $bar = $('#cke_1_toolbox');
-                toolbarList = info.userList;
-                var config = {
-                    userData: userList
-                    // changeNameID: 'cryptpad-changeName'
-                };
-                toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
-
+            var createSaver = function (info) {
                 if(!DEMO_MODE) {
                     Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
                         .find('.rt-toolbar-rightside'),
@@ -428,6 +399,36 @@ define([
                 }
             };
 
+            var onRemote = realtimeOptions.onRemote = function (info) {
+                if (initializing) { return; }
+
+                var shjson = info.realtime.getUserDoc();
+
+                // remember where the cursor is
+                cursor.update();
+
+                updateUserList(shjson);
+
+                // build a dom from HJSON, diff, and patch the editor
+                applyHjson(shjson);
+
+                var shjson2 = stringifyDOM(inner);
+                if (shjson2 !== shjson) {
+                    console.error("shjson2 !== shjson");
+                    module.patchText(shjson2);
+                }
+            };
+
+            var onInit = realtimeOptions.onInit = function (info) {
+                var $bar = $('#cke_1_toolbox');
+                toolbarList = info.userList;
+                var config = {
+                    userData: userList
+                    // changeNameID: 'cryptpad-changeName'
+                };
+                toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
+            };
+
             var onReady = realtimeOptions.onReady = function (info) {
                 var realtime = module.realtime = info.realtime;
                 module.leaveChannel = info.leave;
@@ -445,7 +446,9 @@ define([
                 console.log("Unlocking editor");
                 initializing = false;
                 setEditable(true);
+
                 onLocal();
+                createSaver(info);
             };
 
             var onAbort = realtimeOptions.onAbort = function (info) {
@@ -475,6 +478,7 @@ define([
                 module.realtime.abort();
                 module.leaveChannel();
                 module.aborted = true;
+                Saver.stop();
                 onAbort();
             };
 
