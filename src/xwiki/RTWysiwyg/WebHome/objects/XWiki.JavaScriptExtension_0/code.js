@@ -86,7 +86,9 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     var getKeyData = function(config) {
         return [
             {doc: config.reference, mod: config.language+'/events', editor: "1.0"},
+            {doc: config.reference, mod: config.language+'/events', editor: "userdata"},
             {doc: config.reference, mod: config.language+'/content',editor: "rtwysiwyg"}
+
         ];
     };
 
@@ -101,10 +103,11 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         var keysResultEvents = keysResult[config.language+'/events'];
         if (!keysResultEvents) { console.error("Missing event keys in the document keys"); return keys; }
 
-        if (keysResultContent.rtwysiwyg && keysResultEvents["1.0"]) {
+        if (keysResultContent.rtwysiwyg && keysResultEvents["1.0"] && keysResultEvents["userdata"]) {
             keys.rtwysiwyg = keysResultContent.rtwysiwyg.key;
             keys.rtwysiwyg_users = keysResultContent.rtwysiwyg.users;
             keys.events = keysResultEvents["1.0"].key;
+            keys.userdata = keysResultEvents["userdata"].key;
         }
         else { console.error("Missing mandatory RTWysiwyg key in the document keys"); return keys; }
 
@@ -125,7 +128,7 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         var keysData = getKeyData(config);
         Loader.getKeys(keysData, function(keysResultDoc) {
             var keys = parseKeyData(config, keysResultDoc);
-            if(!keys.rtwysiwyg || !keys.events) {
+            if(!keys.rtwysiwyg || !keys.events || !keys.userdata) {
                 ErrorBox.show('unavailable');
                 console.error("You are not allowed to create a new realtime session for that document.");
             }

@@ -6,6 +6,7 @@ define([
     'RTFrontend_hyperscript',
     'RTFrontend_cursor',
     'RTFrontend_json_ot',
+    'RTFrontend_userdata',
     'RTFrontend_tests',
     'json.sortify',
     'RTFrontend_text_patcher',
@@ -14,7 +15,7 @@ define([
     'RTFrontend_chainpad',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -102,6 +103,7 @@ define([
 
         var channel = docKeys.rtwysiwyg;
         var eventsChannel = docKeys.events;
+        var userdataChannel = docKeys.userdata;
 
         // TOOLBAR style
         var TOOLBAR_CLS = Toolbar.TOOLBAR_CLS;
@@ -301,7 +303,6 @@ define([
 
             var stringifyDOM = function (dom) {
                 var hjson = Hyperjson.fromDOM(dom, isNotMagicLine, brFilter);
-                hjson[3] = {metadata: userList};
                 return stringify(hjson);
             };
 
@@ -337,7 +338,8 @@ define([
                   addToUserList(userData);
                   hjson.pop();
                 }
-            }
+            };
+
             var createSaver = function (info) {
                 if(!DEMO_MODE) {
                     Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
@@ -407,8 +409,6 @@ define([
                 // remember where the cursor is
                 cursor.update();
 
-                updateUserList(shjson);
-
                 // build a dom from HJSON, diff, and patch the editor
                 applyHjson(shjson);
 
@@ -439,7 +439,14 @@ define([
                 var shjson = realtime.getUserDoc();
 
                 // Update the user list to link the wiki name to the user id
-                updateUserList(shjson);
+                var userdataConfig = {
+                    myId : info.myId,
+                    userName : userName,
+                    toolbarChange : toolbarList.onChange,
+                    crypto : Crypto,
+                    transformFunction : JsonOT.validate
+                };
+                UserData.start(info.network, userdataChannel, userdataConfig);
 
                 applyHjson(shjson);
 
