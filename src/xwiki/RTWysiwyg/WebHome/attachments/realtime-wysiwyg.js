@@ -73,14 +73,28 @@ define([
         return true;
     };
 
+    var isNotCursorPosition = function (el) {
+        var filter = (el.tagName === "SPAN" &&
+            el.getAttribute('class') === "rt-user-position");
+        if (filter) {
+            return false;
+        }
+        return true;
+    }
+
+    var shouldSerialize = function (el) {
+        return isNotMagicLine(el) && isNotCursorPosition(el);
+    }
+
     /* catch `type="_moz"` before it goes over the wire */
     var brFilter = function (hj) {
+        if (hj[0] === "BODY#body") { hj[1].style = undefined; }
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
         return hj;
     };
 
     var stringifyDOM = function (dom) {
-        return stringify(Hyperjson.fromDOM(dom, isNotMagicLine, brFilter));
+        return stringify(Hyperjson.fromDOM(dom, shouldSerialize, brFilter));
     };
 
     var main = module.main = function (editorConfig, docKeys) {
@@ -113,11 +127,6 @@ define([
             '.' + TOOLBAR_CLS + ' {',
             '    color: #666;',
             '    font-weight: bold;',
-//            '    background-color: #f0f0ee;',
-//            '    border-bottom: 1px solid #DDD;',
-//            '    border-top: 3px solid #CCC;',
-//            '    border-right: 2px solid #CCC;',
-//            '    border-left: 2px solid #CCC;',
             '    height: 26px;',
             '    margin-bottom: -3px;',
             '    display: inline-block;',
@@ -129,7 +138,6 @@ define([
             '.' + TOOLBAR_CLS + ' div {',
             '    padding: 0 10px;',
             '    height: 1.5em;',
-//            '    background: #f0f0ee;',
             '    line-height: 25px;',
             '    height: 22px;',
             '}',
@@ -187,7 +195,22 @@ define([
         var whenReady = function (editor, iframe) {
 
             var inner = iframe.contentWindow.body;
+            var innerDoc = window.innerDoc = iframe.contentWindow.document;
             var cursor = window.cursor = Cursor(inner);
+            var $contentContainer = $('#cke_1_contents');
+            /*$contentContainer.css({
+                "position" : "relative",
+                "paddingLeft" : "20px"
+            });*/
+            var userIconStyle = [
+                '<style>',
+                '.rt-user-position {',
+                    'position : absolute;',
+                    'width : 15px;',
+                    'background : #DDDDDD;',
+                    'text-align : center;',
+                '</style>'].join('\n');
+            $('head', innerDoc).append(userIconStyle);
 
             var setEditable = module.setEditable = function (bool) {
                 inner.setAttribute('contenteditable', bool);
@@ -198,6 +221,14 @@ define([
 
             var diffOptions = {
                 preDiffApply: function (info) {
+
+                    if (info.node && info.node.tagName === "SPAN" &&
+                        info.node.getAttribute("class") === "rt-user-position") {
+                        if (info.diff.action === "removeElement") {
+                            return true;
+                        }
+                    }
+
                     /* DiffDOM will filter out magicline plugin elements
                         in practice this will make it impossible to use it
                         while someone else is typing, which could be annoying.
@@ -220,6 +251,12 @@ define([
                             console.log("preventing removal of the magic line!");
 
                             // return true to prevent diff application
+                            return true;
+                        }
+                    }
+
+                    if (info.node && info.node.tagName === "BODY") {
+                        if (info.diff.action === "removeAttribute" && info.diff.name === "style") {
                             return true;
                         }
                     }
@@ -268,28 +305,9 @@ define([
 
 
             var initializing = true;
-            var userList = {}; // List of pretty name of all users (mapped with their server ID)
-            var toolbarList; // List of users still connected to the channel (server IDs)
-            var addToUserList = function(data) {
-                for (var attrname in data) { userList[attrname] = data[attrname]; }
-                if(toolbarList && typeof toolbarList.onChange === "function") {
-                    toolbarList.onChange(userList);
-                }
-            };
-
-            var myData = {};
-            var myUserName = ''; // My "pretty name"
-            var myID; // My server ID
-
-            var setMyID = function(info) {
-              myID = info.myID || null;
-              myUserName = myID;
-              myData[myID] = {
-                name: userName
-              };
-              addToUserList(myData);
-            };
-
+            var userData = {}; // List of pretty name of all users (mapped with their server ID)
+            var userList; // List of users still connected to the channel (server IDs)
+            var myId;
 
             var DD = new DiffDom(diffOptions);
 
@@ -299,11 +317,6 @@ define([
                 userDocStateDom.setAttribute("contenteditable", "true"); // lol wtf
                 var patch = (DD).diff(inner, userDocStateDom);
                 (DD).apply(inner, patch);
-            };
-
-            var stringifyDOM = function (dom) {
-                var hjson = Hyperjson.fromDOM(dom, isNotMagicLine, brFilter);
-                return stringify(hjson);
             };
 
             var realtimeOptions = {
@@ -319,25 +332,11 @@ define([
                 // the channel we will communicate over
                 channel: channel,
 
-                // method which allows us to get the id of the user
-                setMyID: setMyID,
-
                 // Crypto object to avoid loading it twice in Cryptpad
                 crypto: Crypto,
 
                 // really basic operational transform
                 transformFunction : JsonOT.validate
-            };
-            var updateUserList = function(shjson) {
-                // Extract the user list (metadata) from the hyperjson
-                var hjson = JSON.parse(shjson);
-                var peerUserList = hjson[3];
-                if(peerUserList && peerUserList.metadata) {
-                  var userData = peerUserList.metadata;
-                  // Update the local user data
-                  addToUserList(userData);
-                  hjson.pop();
-                }
             };
 
             var createSaver = function (info) {
@@ -421,15 +420,86 @@ define([
 
             var onInit = realtimeOptions.onInit = function (info) {
                 var $bar = $('#cke_1_toolbox');
-                toolbarList = info.userList;
+                userList = info.userList;
                 var config = {
-                    userData: userList
-                    // changeNameID: 'cryptpad-changeName'
+                    userData: userData
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
             };
 
+            var getXPath = function (element) {
+                var xpath = '';
+                for ( ; element && element.nodeType == 1; element = element.parentNode ) {
+                    var id = $(element.parentNode).children(element.tagName).index(element) + 1;
+                    id > 1 ? (id = '[' + id + ']') : (id = '');
+                    xpath = '/' + element.tagName.toLowerCase() + id + xpath;
+                }
+                return xpath;
+            };
+
+            var getPrettyName = function (userName) {
+                return (userName) ? userName.replace(/^.*-([^-]*)%2d[0-9]*$/, function(all, one) { 
+                    return decodeURIComponent(one);
+                }) : userName;
+            }
+
+            editor.on( 'toDataFormat', function( evt) {
+                    var root = evt.data.dataValue;
+                    var toRemove = [];
+                    root.forEach( function( node ) {
+                        if (node.name === "style") {
+                            window.myNode = node;
+                            toRemove.push(node);
+                            toRemove = toRemove.concat(node.children);
+                        }
+                        if (typeof node.hasClass !== "undefined" && node.hasClass("rt-user-position")) {
+                            toRemove.push(node);
+                            toRemove = toRemove.concat(node.children);
+                        }
+                    }, null, true );
+                    toRemove.forEach(function (el) {
+                        el.remove();
+                    });
+            }, null, null, 12 );
+
+            var changeUserIcons = function (newdata) {
+                // If no new data (someone has just joined or left the channel), get the latest known values
+                var updatedData = newdata || userData;
+
+                var activeUsers = userList.users.slice(0);
+
+                $(inner).find('.rt-user-position').remove();
+                var positions = REALTIME_DEBUG.positions = {};
+                var requiredPadding = 0;
+                for (var i=0; i<activeUsers.length; i++) {
+                    var id = activeUsers[i];
+                    var data = updatedData[id];
+                    if (!data) { return; }
+                    var name = getPrettyName (data.name);
+
+                    // Set the user position
+                    var element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
+                    if (element != null) {
+                          var pos = $(element).offset();
+                          if (!positions[pos.top]) {
+                              positions[pos.top] = [id];
+                          } else {
+                              positions[pos.top].push(id);
+                          }
+                          var index = positions[pos.top].length - 1;
+                          var posTop = pos.top;
+                          var posLeft = index * 16;
+                          requiredPadding = Math.max(requiredPadding, (posLeft+10));
+                          $(inner).append('<span style="left:'+posLeft+'px; top:'+posTop+'px;" class="rt-user-position" title="' + name + '" contenteditable="false">'+name.substr(0,1)+'</span>');
+                    }
+                }
+                requiredPadding += 10;
+                $(inner).css("padding-left", requiredPadding+'px');
+            }
+
             var onReady = realtimeOptions.onReady = function (info) {
+                if (!initializing) { return; }
+
                 var realtime = module.realtime = info.realtime;
                 module.leaveChannel = info.leave;
                 module.patchText = TextPatcher.create({
@@ -438,15 +508,26 @@ define([
                 });
                 var shjson = realtime.getUserDoc();
 
+                myId = info.myId;
+
                 // Update the user list to link the wiki name to the user id
                 var userdataConfig = {
                     myId : info.myId,
                     userName : userName,
-                    toolbarChange : toolbarList.onChange,
+                    onChange : userList.change,
                     crypto : Crypto,
-                    transformFunction : JsonOT.validate
+                    transformFunction : JsonOT.validate,
+                    editor : 'rtwysiwyg',
+                    getCursor : function() {
+                        var selection = editor.getSelection().getRanges();
+                        if (!selection || !selection[0]) { return ""; }
+                        var cursorNode = selection[0].startContainer.$.parentNode;
+                        var xpath = getXPath(cursorNode);
+                        return xpath;
+                    }
                 };
-                UserData.start(info.network, userdataChannel, userdataConfig);
+                userData = UserData.start(info.network, userdataChannel, userdataConfig);
+                userList.onChange.push(changeUserIcons);
 
                 applyHjson(shjson);
 
