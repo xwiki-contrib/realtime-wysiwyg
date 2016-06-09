@@ -73,20 +73,17 @@ define([
         return true;
     };
 
-    var isNotCursorPosition = function (el) {
-        var filter = (el.tagName === "SPAN" &&
-            el.getAttribute('class') === "rt-user-position");
-        if (filter) {
-            return false;
-        }
-        return true;
+    var isNonRealtime = function (el) {
+        return (typeof el.getAttribute === "function" &&
+                el.getAttribute('class') &&
+                el.getAttribute('class').split(" ").indexOf("rt-non-realtime") !== -1);
     }
 
     var shouldSerialize = function (el) {
-        return isNotMagicLine(el) && isNotCursorPosition(el);
+        return isNotMagicLine(el) && !isNonRealtime(el);
     }
 
-    /* catch `type="_moz"` before it goes over the wire */
+    /* catch `type="_moz"` and body's inline style before it goes over the wire */
     var brFilter = function (hj) {
         if (hj[0] === "BODY#body") { hj[1].style = undefined; }
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
@@ -104,6 +101,7 @@ define([
         var userName = editorConfig.userName;
         var DEMO_MODE = editorConfig.DEMO_MODE;
         var language = editorConfig.language;
+        var userAvatar = editorConfig.userAvatarURL;
         var saverConfig = editorConfig.saverConfig || {};
         saverConfig.chainpad = Chainpad;
         saverConfig.editorType = 'rtwysiwyg';
@@ -127,13 +125,10 @@ define([
             '.' + TOOLBAR_CLS + ' {',
             '    color: #666;',
             '    font-weight: bold;',
-            '    height: 26px;',
+            '    height: 45px;',
             '    margin-bottom: -3px;',
             '    display: inline-block;',
             '    width: 100%;',
-            '}',
-            '.' + TOOLBAR_CLS + ' a {',
-            '    float: right;',
             '}',
             '.' + TOOLBAR_CLS + ' div {',
             '    padding: 0 10px;',
@@ -207,8 +202,14 @@ define([
                 '.rt-user-position {',
                     'position : absolute;',
                     'width : 15px;',
+                    'height: 15px;',
+                    'display: inline-block;',
                     'background : #DDDDDD;',
+                    'border : 1px solid #AAAAAA;',
                     'text-align : center;',
+                    'line-height: 15px;',
+                    'color: #3333FF;',
+                '}',
                 '</style>'].join('\n');
             $('head', innerDoc).append(userIconStyle);
 
@@ -222,8 +223,7 @@ define([
             var diffOptions = {
                 preDiffApply: function (info) {
 
-                    if (info.node && info.node.tagName === "SPAN" &&
-                        info.node.getAttribute("class") === "rt-user-position") {
+                    if (info.node && isNonRealtime(info.node)) {
                         if (info.diff.action === "removeElement") {
                             return true;
                         }
@@ -452,7 +452,7 @@ define([
                             toRemove.push(node);
                             toRemove = toRemove.concat(node.children);
                         }
-                        if (typeof node.hasClass !== "undefined" && node.hasClass("rt-user-position")) {
+                        if (typeof node.hasClass !== "undefined" && node.hasClass("rt-non-realtime")) {
                             toRemove.push(node);
                             toRemove = toRemove.concat(node.children);
                         }
@@ -480,20 +480,34 @@ define([
                     // Set the user position
                     var element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
                     if (element != null) {
-                          var pos = $(element).offset();
-                          if (!positions[pos.top]) {
-                              positions[pos.top] = [id];
-                          } else {
-                              positions[pos.top].push(id);
-                          }
-                          var index = positions[pos.top].length - 1;
-                          var posTop = pos.top;
-                          var posLeft = index * 16;
-                          requiredPadding = Math.max(requiredPadding, (posLeft+10));
-                          $(inner).append('<span style="left:'+posLeft+'px; top:'+posTop+'px;" class="rt-user-position" title="' + name + '" contenteditable="false">'+name.substr(0,1)+'</span>');
+                        var pos = $(element).offset();
+                        if (!positions[pos.top]) {
+                            positions[pos.top] = [id];
+                        } else {
+                            positions[pos.top].push(id);
+                        }
+                        var index = positions[pos.top].length - 1;
+                        var posTop = pos.top + 3;
+                        var posLeft = index * 16;
+                        requiredPadding = Math.max(requiredPadding, (posLeft+10));
+                        var $indicator;
+                        if (data.avatar) {
+                            $indicator = $('<img src="' + data.avatar + '?width=15" alt="" />');
+                        } else {
+                            $indicator = $('<div>' + name.substr(0,1) + '</div>');
+                        }
+                        $indicator.addClass("rt-non-realtime rt-user-position");
+                        $indicator.attr("contenteditable", "false");
+                        $indicator.attr("id", "rt-user-" + id);
+                        $indicator.attr("title", name);
+                        $indicator.css({
+                            "left" : posLeft + "px",
+                            "top" : posTop + "px"
+                        });
+                        $indicator.appendTo(inner);
                     }
                 }
-                requiredPadding += 10;
+                requiredPadding += 15;
                 $(inner).css("padding-left", requiredPadding+'px');
             }
 
@@ -514,20 +528,22 @@ define([
                 var userdataConfig = {
                     myId : info.myId,
                     userName : userName,
-                    onChange : userList.change,
+                    userAvatar : userAvatar,
+                    onChange : userList.onChange,
                     crypto : Crypto,
                     transformFunction : JsonOT.validate,
                     editor : 'rtwysiwyg',
                     getCursor : function() {
                         var selection = editor.getSelection().getRanges();
                         if (!selection || !selection[0]) { return ""; }
-                        var cursorNode = selection[0].startContainer.$.parentNode;
-                        var xpath = getXPath(cursorNode);
+                        var node = selection[0].startContainer.$;
+                        node = (node.nodeName === "#text") ? node.parentNode : node;
+                        var xpath = getXPath(node);
                         return xpath;
                     }
                 };
                 userData = UserData.start(info.network, userdataChannel, userdataConfig);
-                userList.onChange.push(changeUserIcons);
+                userList.change.push(changeUserIcons);
 
                 applyHjson(shjson);
 
