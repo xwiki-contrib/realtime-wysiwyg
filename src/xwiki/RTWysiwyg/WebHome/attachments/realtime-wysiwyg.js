@@ -110,6 +110,17 @@ define([
         saverConfig.mergeContent = true;
         var Messages = saverConfig.messages || {};
 
+        var $configField = $('#realtime-frontend-getconfig');
+        var pasedConfig;
+        if ($configField.length) {
+            try {
+                parsedConfig = JSON.parse($configField.html());
+            } catch (e) {
+                console.error(e);
+            }
+        }
+        var displayAvatarInMargin = typeof parsedConfig !== "undefined" ? parseInt(parsedConfig.marginAvatar) : 0;
+
         /** Key in the localStore which indicates realtime activity should be disallowed. */
         var LOCALSTORAGE_DISALLOW = editorConfig.LOCALSTORAGE_DISALLOW;
 
@@ -125,7 +136,7 @@ define([
             '.' + TOOLBAR_CLS + ' {',
             '    color: #666;',
             '    font-weight: bold;',
-            '    height: 45px;',
+            '    height: 30px;',
             '    margin-bottom: -3px;',
             '    display: inline-block;',
             '    width: 100%;',
@@ -204,11 +215,14 @@ define([
                     'width : 15px;',
                     'height: 15px;',
                     'display: inline-block;',
-                    'background : #DDDDDD;',
+                    'background : #CCCCFF;',
                     'border : 1px solid #AAAAAA;',
                     'text-align : center;',
                     'line-height: 15px;',
+                    'font-size: 11px;',
+                    'font-weight: bold;',
                     'color: #3333FF;',
+                    'user-select: none;',
                 '}',
                 '</style>'].join('\n');
             $('head', innerDoc).append(userIconStyle);
@@ -463,6 +477,8 @@ define([
             }, null, null, 12 );
 
             var changeUserIcons = function (newdata) {
+                if (!displayAvatarInMargin || displayAvatarInMargin == 0) { return; }
+
                 // If no new data (someone has just joined or left the channel), get the latest known values
                 var updatedData = newdata || userData;
 
