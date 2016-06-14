@@ -59,6 +59,7 @@ define([
         return 'rtwiki-uid-' + String(Math.random()).substring(2);
     };
 
+    // Filter elements to serialize
     var isNotMagicLine = function (el) {
         // factor as:
         // return !(el.tagName === 'SPAN' && el.contentEditable === 'false');
@@ -72,26 +73,67 @@ define([
         }
         return true;
     };
-
+    var isMacroStuff = function (el) {
+        var isMac = ( typeof el.getAttribute === "function" &&
+                      ( el.getAttribute('data-cke-hidden-sel') ||
+                        ( el.tagName === 'SPAN' && el.getAttribute('class') &&
+                          el.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1 ) ) );
+        //if (isMac) { console.log("Prevent serialize macro stuff", el); }
+        return isMac;
+    };
     var isNonRealtime = function (el) {
         return (typeof el.getAttribute === "function" &&
                 el.getAttribute('class') &&
                 el.getAttribute('class').split(" ").indexOf("rt-non-realtime") !== -1);
-    }
-
+    };
     var shouldSerialize = function (el) {
-        return isNotMagicLine(el) && !isNonRealtime(el);
-    }
+        return isNotMagicLine(el) && !isNonRealtime(el) && !isMacroStuff(el);
+    };
 
+    // Filter attributes in the serialized elements
+    var macroFilter = function (hj) {
+        // Send a widget ID == 0 to avoid a fight between broswers about it and
+        // prevent the container from having the "selected" class (blue border)
+        if (hj[1].class &&
+                hj[1].class.split(' ').indexOf('cke_widget_wrapper') !== -1 &&
+                hj[1].class.split(' ').indexOf('cke_widget_block') !== -1) {
+            hj[1].class = "cke_widget_wrapper cke_widget_block";
+            hj[1]['data-cke-widget-id'] = "0";
+        }
+        if (hj[1].class &&
+                hj[1].class.split(' ').indexOf('cke_widget_wrapper') !== -1 &&
+                hj[1].class.split(' ').indexOf('cke_widget_inline') !== -1) {
+            hj[1].class = "cke_widget_wrapper cke_widget_inline";
+            hj[1]['data-cke-widget-id'] = "0";
+        }
+        // Don't send the "upcasted" attribute which can be removed, generating a shjson != shjson2 error
+        if (hj[1].class && hj[1]['data-macro'] &&
+                hj[1].class.split(' ').indexOf('macro') !== -1) {
+            hj[1]['data-cke-widget-upcasted'] = undefined;
+        }
+        return hj;
+    };
+    var bodyFilter = function (hj) {
+        if (hj[0] === "BODY#body") {
+            hj[1].style = undefined;
+            if (hj[1].contenteditable) { hj[1].contenteditable = "false"; }
+        }
+        return hj;
+    }
     /* catch `type="_moz"` and body's inline style before it goes over the wire */
     var brFilter = function (hj) {
-        if (hj[0] === "BODY#body") { hj[1].style = undefined; }
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
         return hj;
     };
+    var hjFilter = function (hj) {
+        hj = brFilter(hj);
+        hj = bodyFilter(hj);
+        hj = macroFilter(hj);
+        return hj;
+    }
 
-    var stringifyDOM = function (dom) {
-        return stringify(Hyperjson.fromDOM(dom, shouldSerialize, brFilter));
+    var stringifyDOM = window.stringifyDOM = function (dom) {
+        return stringify(Hyperjson.fromDOM(dom, shouldSerialize, hjFilter));
     };
 
     var main = module.main = function (editorConfig, docKeys) {
@@ -200,14 +242,9 @@ define([
 
         var whenReady = function (editor, iframe) {
 
-            var inner = iframe.contentWindow.body;
+            var inner = window.inner = iframe.contentWindow.body;
             var innerDoc = window.innerDoc = iframe.contentWindow.document;
             var cursor = window.cursor = Cursor(inner);
-            var $contentContainer = $('#cke_1_contents');
-            /*$contentContainer.css({
-                "position" : "relative",
-                "paddingLeft" : "20px"
-            });*/
             var userIconStyle = [
                 '<style>',
                 '.rt-user-position {',
@@ -225,7 +262,14 @@ define([
                     'user-select: none;',
                 '}',
                 '</style>'].join('\n');
-            $('head', innerDoc).append(userIconStyle);
+            var addStyle = function() {
+                inner = iframe.contentWindow.body;
+                innerDoc = iframe.contentWindow.document;
+                $('head', innerDoc).append(userIconStyle);
+            };
+            addStyle();
+            // Add the style again when modifying a macro (which reloads the iframe)
+            iframe.onload = addStyle;
 
             var setEditable = module.setEditable = function (bool) {
                 inner.setAttribute('contenteditable', bool);
@@ -236,19 +280,62 @@ define([
 
             var diffOptions = {
                 preDiffApply: function (info) {
-
                     if (info.node && isNonRealtime(info.node)) {
                         if (info.diff.action === "removeElement") {
                             return true;
                         }
                     }
 
-                    // FIXME
-                    if (info.node && info.node.tagName === 'DIV' &&
+                    /*
+                     * Prevent diffdom from removing or modifying important macro elements
+                     */
+                    var isMacro = false;
+                    // Macro container : should not be modified at all, unless it is removed completely
+                    if (info.node && (info.node.tagName === 'DIV' || info.node.tagName === 'SPAN') &&
                             info.node.getAttribute('contenteditable') === 'false' &&
                             /macro/.test(info.node.getAttribute('data-cke-display-name')) ) {
-                        console.log('preventing removal of the macro');
+                        isMacro = true;
+                        if (info.diff.action === "removeElement" && info.diff.element.attributes &&
+                                (info.diff.element.attributes.class === "cke_widget_wrapper cke_widget_block" ||
+                                 info.diff.element.attributes.class === "cke_widget_wrapper cke_widget_inline") ) {
+                            //console.log('Removing a macro');
+                        } else {
+                            //console.log('Preventing modification of a macro container', info.node);
+                            //return true;
+                        }
+                    }
+                    // CkEditor drag&drop for widgets
+                    if (info.node && info.node.tagName === 'SPAN' &&
+                            info.node.getAttribute('class') &&
+                            info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1) {
+                        //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
                         return true;
+                    }/*
+                    if (info.node && info.node.tagName === 'IMG' &&
+                            info.node.getAttribute('class') &&
+                            info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler') !== -1) {
+                        //console.log('Preventing removal of the drag&drop icon of a macro', info.node);
+                        return true;
+                    }*/
+                    // Macro content : only the data elements should be modified.
+                    if (info.node && (info.node.tagName === 'SPAN' || info.node.tagName === 'DIV') &&
+                            info.node.getAttribute('data-widget') === "xwiki-macro") {
+                        isMacro = true;
+                        /*if (info.diff.action !== "modifyAttribute" || !info.diff.name ||
+                                    (info.diff.name !== "data-cke-widget-data" && info.diff.name !== "data-macro")) {
+                            //console.log('Preventing modification of a macro attributes');
+                            return true;
+                        }/* else if (info.diff.name === 'data-cke-widget-data') {
+                            // Get the new data and put it in the JS object
+                            try {
+                                var widgetId = parseInt(info.node.parentNode.getAttribute('data-cke-widget-id'));
+                                var widget = editor.widgets.instances[widgetId];
+                                var data = JSON.parse(decodeURIComponent(info.diff.newValue));
+                                widget.setData(data);
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }*/
                     }
 
                     /* DiffDOM will filter out magicline plugin elements
@@ -258,7 +345,7 @@ define([
                         we should check when such an element is going to be
                         removed, and prevent that from happening. */
                     if (info.node && (info.node.tagName === 'SPAN' || info.node.tagName === 'DIV') &&
-                        info.node.getAttribute('contentEditable') === "false") {
+                        info.node.getAttribute('contentEditable') === "false" && !isMacro) {
                         // it seems to be a magicline plugin element...
 
                         if (info.diff.action === 'removeElement') {
@@ -279,7 +366,7 @@ define([
                     }
 
                     if (info.node && info.node.tagName === "BODY") {
-                        if (info.diff.action === "removeAttribute" && info.diff.name === "style") {
+                        if (info.diff.action === "modifyAttribute" || (info.diff.action === "removeAttribute" && info.diff.name === "style")) {
                             return true;
                         }
                     }
@@ -334,12 +421,26 @@ define([
 
             var DD = new DiffDom(diffOptions);
 
+            var fixMacros = function () {
+                var dataValues = {};
+                var $elements = $(innerDoc).find('[data-cke-widget-data]');
+                $elements.each(function (idx, el) {
+                    dataValues[idx] = $(el).attr('data-cke-widget-data');
+                });
+                editor.widgets.instances = {};
+                editor.widgets.checkWidgets();
+                $elements.each(function (idx, el) {
+                    $(el).attr('data-cke-widget-data', dataValues[idx]);
+                });
+            }
+
             // apply patches, and try not to lose the cursor in the process!
             var applyHjson = function (shjson) {
                 var userDocStateDom = hjsonToDom(JSON.parse(shjson));
                 userDocStateDom.setAttribute("contenteditable", "true"); // lol wtf
                 var patch = (DD).diff(inner, userDocStateDom);
                 (DD).apply(inner, patch);
+                try { fixMacros(); } catch (e) { console.log("Unable to fix the macros", e); }
             };
 
             var realtimeOptions = {
@@ -427,6 +528,8 @@ define([
                 if (initializing) { return; }
 
                 var shjson = info.realtime.getUserDoc();
+                //console.log(shjson); TODO
+                //console.log(stringifyDOM(inner));
 
                 // remember where the cursor is
                 cursor.update();
@@ -437,6 +540,8 @@ define([
                 var shjson2 = stringifyDOM(inner);
                 if (shjson2 !== shjson) {
                     console.error("shjson2 !== shjson");
+                    console.log(shjson2);
+                    console.log(shjson);
                     module.patchText(shjson2);
                 }
             };
@@ -467,39 +572,48 @@ define([
             }
 
             editor.on( 'toDataFormat', function( evt) {
-                    var root = evt.data.dataValue;
-                    var toRemove = [];
-                    var toReplaceMacro = [];
-                    root.forEach( function( node ) {
-                        if (node.name === "style") {
-                            window.myNode = node;
+                var root = evt.data.dataValue;
+                var toRemove = [];
+                var toReplaceMacro = [];
+                root.forEach( function( node ) {
+                    if (node.name === "style") {
+                        window.myNode = node;
+                        toRemove.push(node);
+                    }
+                    if (typeof node.hasClass === "function") {
+                        if (node.hasClass("rt-non-realtime")) {
                             toRemove.push(node);
+                        } else if (node.hasClass("macro") &&
+                                node.attributes &&
+                                node.attributes['data-macro'] &&
+                                node.parent &&
+                                node.parent.attributes &&
+                                node.parent.attributes.contenteditable === "false") {
+                            toReplaceMacro.push(node);
                         }
-                        if (typeof node.hasClass === "function") {
-                            if (node.hasClass("rt-non-realtime")) {
-                                toRemove.push(node);
-                            } else if (node.hasClass("macro") &&
-                                    node.attributes &&
-                                    node.attributes['data-macro'] &&
-                                    node.parent &&
-                                    node.parent.attributes &&
-                                    node.parent.attributes.contenteditable === "false") {
-                                toReplaceMacro.push(node);
-                            }
-                        }
-                    }, null, true );
-                    toRemove.forEach(function (el) {
-                        if (!el) { return; }
-                        el.forEach(function (node) {
-                            node.remove();
-                        });
+                    }
+                }, null, true );
+                toRemove.forEach(function (el) {
+                if (!el) { return; }
+                    el.forEach(function (node) {
+                        node.remove();
                     });
+                });
+                var macroWidget;
+                for (var widget in editor.widgets.instances) {
+                    if (widget.name && widget.name === 'xwiki-macro') {
+                        macroWidget = widget;
+                        break;
+                    }
+                }
+                if (macroWidget) {
                     toReplaceMacro.forEach(function (el) {
                         var container = el.parent;
-                        var newNode = editor.widgets.instances[0].downcast(el);
+                        var newNode = macroWidget.downcast(el);
                         var index = container.parent.children.indexOf(container);
                         container.parent.children[index] = newNode;
                     });
+                }
             }, null, null, 12 );
 
             var changeUserIcons = function (newdata) {
@@ -556,7 +670,7 @@ define([
             var onReady = realtimeOptions.onReady = function (info) {
                 if (!initializing) { return; }
 
-                var realtime = module.realtime = info.realtime;
+                var realtime = window.realtime = module.realtime = info.realtime;
                 module.leaveChannel = info.leave;
                 module.patchText = TextPatcher.create({
                     realtime: realtime,
@@ -641,6 +755,10 @@ define([
                 Saver.destroyDialog();
                 Saver.setLocalEditFlag(true);
                 onLocal();
+                if (inner !== iframe.contentWindow.body) {
+                    console.log('New inner body');
+                    //inner = iframe.contentWindow.body;
+                }
             });
 
             // export the typing tests to the window.
