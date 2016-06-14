@@ -243,15 +243,24 @@ define([
                         }
                     }
 
+                    // FIXME
+                    if (info.node && info.node.tagName === 'DIV' &&
+                            info.node.getAttribute('contenteditable') === 'false' &&
+                            /macro/.test(info.node.getAttribute('data-cke-display-name')) ) {
+                        console.log('preventing removal of the macro');
+                        return true;
+                    }
+
                     /* DiffDOM will filter out magicline plugin elements
                         in practice this will make it impossible to use it
                         while someone else is typing, which could be annoying.
 
                         we should check when such an element is going to be
                         removed, and prevent that from happening. */
-                    if (info.node && info.node.tagName === 'SPAN' &&
+                    if (info.node && (info.node.tagName === 'SPAN' || info.node.tagName === 'DIV') &&
                         info.node.getAttribute('contentEditable') === "false") {
                         // it seems to be a magicline plugin element...
+
                         if (info.diff.action === 'removeElement') {
                             // and you're about to remove it...
                             // this probably isn't what you want
@@ -460,19 +469,36 @@ define([
             editor.on( 'toDataFormat', function( evt) {
                     var root = evt.data.dataValue;
                     var toRemove = [];
+                    var toReplaceMacro = [];
                     root.forEach( function( node ) {
                         if (node.name === "style") {
                             window.myNode = node;
                             toRemove.push(node);
-                            toRemove = toRemove.concat(node.children);
                         }
-                        if (typeof node.hasClass !== "undefined" && node.hasClass("rt-non-realtime")) {
-                            toRemove.push(node);
-                            toRemove = toRemove.concat(node.children);
+                        if (typeof node.hasClass === "function") {
+                            if (node.hasClass("rt-non-realtime")) {
+                                toRemove.push(node);
+                            } else if (node.hasClass("macro") &&
+                                    node.attributes &&
+                                    node.attributes['data-macro'] &&
+                                    node.parent &&
+                                    node.parent.attributes &&
+                                    node.parent.attributes.contenteditable === "false") {
+                                toReplaceMacro.push(node);
+                            }
                         }
                     }, null, true );
                     toRemove.forEach(function (el) {
-                        el.remove();
+                        if (!el) { return; }
+                        el.forEach(function (node) {
+                            node.remove();
+                        });
+                    });
+                    toReplaceMacro.forEach(function (el) {
+                        var container = el.parent;
+                        var newNode = editor.widgets.instances[0].downcast(el);
+                        var index = container.parent.children.indexOf(container);
+                        container.parent.children[index] = newNode;
                     });
             }, null, null, 12 );
 
