@@ -46,7 +46,7 @@ define([
     window.Toolbar = Toolbar;
     window.Hyperjson = Hyperjson;
 
-    var hjsonToDom = function (H) {
+    var hjsonToDom = window.hjsonToDom = function (H) {
         return Hyperjson.callOn(H, Hyperscript);
     };
 
@@ -102,7 +102,10 @@ define([
     };
     var bodyFilter = function (hj) {
         if (hj[0] === "BODY#body") {
+            // The "style" contains the padding created for the user position indicators.
+            // We don't want to share that value since it is related to the new userdata channel and not the content channel.
             hj[1].style = undefined;
+            // "contenteditable" in the body is changed during initialization, we should not get the new value from the wire.
             if (hj[1].contenteditable) { hj[1].contenteditable = "false"; }
         }
         return hj;
@@ -112,24 +115,10 @@ define([
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
         return hj;
     };
-    // Replace all hex colors in style attributes by their rgb equivalent to match with hjsonToDom
-    var colorFilter = function (hj) {
-        if (hj[1] && hj[1].style) {
-            var crtStyle = hj[1].style;
-            var rgbHex = /#([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/gi;
-            hj[1].style = crtStyle.replace(rgbHex, function (m, r, g, b) {
-                return 'rgb(' + parseInt(r,16) + ', '
-                    + parseInt(g,16) + ', '
-                    + parseInt(b,16) + ')';
-            }).trim();
-        }
-        return hj;
-    };
     var hjFilter = function (hj) {
         hj = brFilter(hj);
         hj = bodyFilter(hj);
         hj = macroFilter(hj);
-        hj = colorFilter(hj);
         return hj;
     }
 
@@ -299,58 +288,16 @@ define([
                         }
                     }
 
-                    /*
-                     * Prevent diffdom from removing or modifying important macro elements
-                     */
-                    var isMacro = false;
-                    // Macro container : should not be modified at all, unless it is removed completely
-                    if (info.node && (info.node.tagName === 'DIV' || info.node.tagName === 'SPAN') &&
-                            info.node.getAttribute('contenteditable') === 'false' &&
-                            /macro/.test(info.node.getAttribute('data-cke-display-name')) ) {
-                        isMacro = true;
-                        if (info.diff.action === "removeElement" && info.diff.element.attributes &&
-                                (info.diff.element.attributes.class === "cke_widget_wrapper cke_widget_block" ||
-                                 info.diff.element.attributes.class === "cke_widget_wrapper cke_widget_inline") ) {
-                            //console.log('Removing a macro');
-                        } else {
-                            //console.log('Preventing modification of a macro container', info.node);
-                            //return true;
-                        }
-                    }
-                    // CkEditor drag&drop for widgets
+                    // CkEditor drag&drop icon for widgets (macros)
                     if (info.node && info.node.tagName === 'SPAN' &&
                             info.node.getAttribute('class') &&
                             info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1) {
                         //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
                         return true;
-                    }/*
-                    if (info.node && info.node.tagName === 'IMG' &&
-                            info.node.getAttribute('class') &&
-                            info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler') !== -1) {
-                        //console.log('Preventing removal of the drag&drop icon of a macro', info.node);
-                        return true;
-                    }*/
-                    // Macro content : only the data elements should be modified.
-                    if (info.node && (info.node.tagName === 'SPAN' || info.node.tagName === 'DIV') &&
-                            info.node.getAttribute('data-widget') === "xwiki-macro") {
-                        isMacro = true;
-                        /*if (info.diff.action !== "modifyAttribute" || !info.diff.name ||
-                                    (info.diff.name !== "data-cke-widget-data" && info.diff.name !== "data-macro")) {
-                            //console.log('Preventing modification of a macro attributes');
-                            return true;
-                        }/* else if (info.diff.name === 'data-cke-widget-data') {
-                            // Get the new data and put it in the JS object
-                            try {
-                                var widgetId = parseInt(info.node.parentNode.getAttribute('data-cke-widget-id'));
-                                var widget = editor.widgets.instances[widgetId];
-                                var data = JSON.parse(decodeURIComponent(info.diff.newValue));
-                                widget.setData(data);
-                            } catch (e) {
-                                console.error(e);
-                            }
-                        }*/
                     }
 
+                    // The "style" attribute in the "body" contains the padding used to display the user position indicators.
+                    // It is not related to the content channel, but to the userdata channel.
                     if (info.node && info.node.tagName === "BODY") {
                         if (info.diff.action === "modifyAttribute" || (info.diff.action === "removeAttribute" && info.diff.name === "style")) {
                             return true;
