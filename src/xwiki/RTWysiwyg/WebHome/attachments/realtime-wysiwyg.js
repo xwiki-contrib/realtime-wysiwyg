@@ -60,19 +60,6 @@ define([
     };
 
     // Filter elements to serialize
-    var isNotMagicLine = function (el) {
-        // factor as:
-        // return !(el.tagName === 'SPAN' && el.contentEditable === 'false');
-        var filter = (el.tagName === 'SPAN' &&
-            el.getAttribute('contentEditable') === 'false' &&
-            /position:absolute;border-top:1px dashed/.test(el.getAttribute('style')));
-        if (filter) {
-            console.log("[hyperjson.serializer] prevented an element" +
-                "from being serialized:", el);
-            return false;
-        }
-        return true;
-    };
     var isMacroStuff = function (el) {
         var isMac = ( typeof el.getAttribute === "function" &&
                       ( el.getAttribute('data-cke-hidden-sel') ||
@@ -87,7 +74,7 @@ define([
                 el.getAttribute('class').split(" ").indexOf("rt-non-realtime") !== -1);
     };
     var shouldSerialize = function (el) {
-        return isNotMagicLine(el) && !isNonRealtime(el) && !isMacroStuff(el);
+        return !isNonRealtime(el) && !isMacroStuff(el);
     };
 
     // Filter attributes in the serialized elements
@@ -125,10 +112,24 @@ define([
         if (hj[1].type === '_moz') { hj[1].type = undefined; }
         return hj;
     };
+    // Replace all hex colors in style attributes by their rgb equivalent to match with hjsonToDom
+    var colorFilter = function (hj) {
+        if (hj[1] && hj[1].style) {
+            var crtStyle = hj[1].style;
+            var rgbHex = /#([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])([0-9A-F][0-9A-F])/gi;
+            hj[1].style = crtStyle.replace(rgbHex, function (m, r, g, b) {
+                return 'rgb(' + parseInt(r,16) + ', '
+                    + parseInt(g,16) + ', '
+                    + parseInt(b,16) + ')';
+            }).trim();
+        }
+        return hj;
+    };
     var hjFilter = function (hj) {
         hj = brFilter(hj);
         hj = bodyFilter(hj);
         hj = macroFilter(hj);
+        hj = colorFilter(hj);
         return hj;
     }
 
@@ -245,6 +246,17 @@ define([
             var inner = window.inner = iframe.contentWindow.body;
             var innerDoc = window.innerDoc = iframe.contentWindow.document;
             var cursor = window.cursor = Cursor(inner);
+
+            // Fix the magic line issue
+            var fixMagicLine = function () {
+                if(editor.plugins.magicline.backdoor) {
+                    editor.plugins.magicline.backdoor.that.line.$.setAttribute('class', 'rt-non-realtime');
+                    console.log(editor.plugins.magicline.backdoor.that.line.$);
+                    return;
+                }
+                setTimeout(fixMagicLine, 100);
+            }
+            // User position indicator style
             var userIconStyle = [
                 '<style>',
                 '.rt-user-position {',
@@ -266,6 +278,7 @@ define([
                 inner = iframe.contentWindow.body;
                 innerDoc = iframe.contentWindow.document;
                 $('head', innerDoc).append(userIconStyle);
+                fixMagicLine();
             };
             addStyle();
             // Add the style again when modifying a macro (which reloads the iframe)
@@ -336,33 +349,6 @@ define([
                                 console.error(e);
                             }
                         }*/
-                    }
-
-                    /* DiffDOM will filter out magicline plugin elements
-                        in practice this will make it impossible to use it
-                        while someone else is typing, which could be annoying.
-
-                        we should check when such an element is going to be
-                        removed, and prevent that from happening. */
-                    if (info.node && (info.node.tagName === 'SPAN' || info.node.tagName === 'DIV') &&
-                        info.node.getAttribute('contentEditable') === "false" && !isMacro) {
-                        // it seems to be a magicline plugin element...
-
-                        if (info.diff.action === 'removeElement') {
-                            // and you're about to remove it...
-                            // this probably isn't what you want
-
-                            /*
-                                I have never seen this in the console, but the
-                                magic line is still getting removed on remote
-                                edits. This suggests that it's getting removed
-                                by something other than diffDom.
-                            */
-                            console.log("preventing removal of the magic line!");
-
-                            // return true to prevent diff application
-                            return true;
-                        }
                     }
 
                     if (info.node && info.node.tagName === "BODY") {
@@ -634,8 +620,11 @@ define([
                     var name = getPrettyName (data.name);
 
                     // Set the user position
-                    var element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
-                    if (element != null) {
+                    var element = undefined; // If not declared as undefined, it keeps the previous value from the loop
+                    if (data.cursor_rtwysiwyg) {
+                        element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
+                    }
+                    if (element) {
                         var pos = $(element).offset();
                         if (!positions[pos.top]) {
                             positions[pos.top] = [id];
