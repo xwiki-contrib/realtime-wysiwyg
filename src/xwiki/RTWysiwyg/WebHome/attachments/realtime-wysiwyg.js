@@ -624,7 +624,7 @@ define([
 
                 var activeUsers = userList.users.slice(0);
 
-                $(inner).find('.rt-user-position').remove();
+                $(innerDoc).find('.rt-user-position').remove();
                 var positions = REALTIME_DEBUG.positions = {};
                 var requiredPadding = 0;
                 for (var i=0; i<activeUsers.length; i++) {
@@ -660,7 +660,7 @@ define([
                             "left" : posLeft + "px",
                             "top" : posTop + "px"
                         });
-                        $indicator.appendTo(inner);
+                        $('html', innerDoc).append($indicator);
                     }
                 }
                 requiredPadding += 15;
