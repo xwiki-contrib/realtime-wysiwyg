@@ -63,13 +63,14 @@ define([
     var isMacroStuff = function (el) {
         var isMac = ( typeof el.getAttribute === "function" &&
                       ( el.getAttribute('data-cke-hidden-sel') ||
-                        ( el.tagName === 'SPAN' && el.getAttribute('class') &&
-                          el.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1 ) ) );
+                        ( el.getAttribute('class') &&
+                          (el.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1 ||
+                           el.getAttribute('class').split(' ').indexOf('cke_image_resizer') !== -1) ) ) );
         //if (isMac) { console.log("Prevent serialize macro stuff", el); }
         return isMac;
     };
     var isNonRealtime = function (el) {
-        return (typeof el.getAttribute === "function" &&
+        return (el && typeof el.getAttribute === "function" &&
                 el.getAttribute('class') &&
                 el.getAttribute('class').split(" ").indexOf("rt-non-realtime") !== -1);
     };
@@ -97,6 +98,12 @@ define([
         if (hj[1].class && hj[1]['data-macro'] &&
                 hj[1].class.split(' ').indexOf('macro') !== -1) {
             hj[1]['data-cke-widget-upcasted'] = undefined;
+        }
+        // Remove the title attribute of the drag&drop icons since they are localized and create fights over the language to use
+        if (hj[1].class &&
+                ( hj[1].class.split(' ').indexOf('cke_widget_drag_handler') ||
+                  hj[1].class.split(' ').indexOf('cke_image_resizer') ) ) {
+            hj[1].title = undefined;
         }
         return hj;
     };
@@ -236,15 +243,19 @@ define([
             var innerDoc = window.innerDoc = iframe.contentWindow.document;
             var cursor = window.cursor = Cursor(inner);
 
+            //editor.plugins.magicline.backdoor.that.line.$.setAttribute('class', 'rt-non-realtime');
+            var ml = editor.plugins.magicline.backdoor.that.line.$;
+            [ml, ml.parentElement].forEach(function (el) {
+                el.setAttribute('class', 'rt-non-realtime');
+            }); 
             // Fix the magic line issue
-            var fixMagicLine = function () {
+            /*var fixMagicLine = function () {
                 if(editor.plugins.magicline.backdoor) {
-                    editor.plugins.magicline.backdoor.that.line.$.setAttribute('class', 'rt-non-realtime');
-                    console.log(editor.plugins.magicline.backdoor.that.line.$);
+                   console.log(editor.plugins.magicline.backdoor.that.line.$);
                     return;
                 }
                 setTimeout(fixMagicLine, 100);
-            }
+            }*/
             // User position indicator style
             var userIconStyle = [
                 '<style>',
@@ -267,7 +278,7 @@ define([
                 inner = iframe.contentWindow.body;
                 innerDoc = iframe.contentWindow.document;
                 $('head', innerDoc).append(userIconStyle);
-                fixMagicLine();
+                //fixMagicLine();
             };
             addStyle();
             // Add the style again when modifying a macro (which reloads the iframe)
@@ -288,12 +299,22 @@ define([
                         }
                     }
 
-                    // CkEditor drag&drop icon for widgets (macros)
+                    // CkEditor drag&drop icon container
                     if (info.node && info.node.tagName === 'SPAN' &&
                             info.node.getAttribute('class') &&
                             info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1) {
                         //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
                         return true;
+                    }
+                    // CkEditor drag&drop title (language fight)
+                    if (info.node && info.node.getAttribute &&
+                            info.node.getAttribute('class') &&
+                            (info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler') !== -1 ||
+                             info.node.getAttribute('class').split(' ').indexOf('cke_image_resizer') !== -1 ) ) {
+                        //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
+                        //if (info.diff.action === "removeAttribute" && info.diff.name === "title") {
+                            return true;
+                        //}
                     }
 
                     // The "style" attribute in the "body" contains the padding used to display the user position indicators.
@@ -420,7 +441,7 @@ define([
                                     doc.body.setAttribute("contenteditable", "true");
                                     var patch = (DD).diff(inner, doc.body);
                                     (DD).apply(inner, patch);
-
+                                    editor.execCommand('xwiki-refresh');
                                     callback();
                                     onLocal();
                                 });
@@ -431,7 +452,7 @@ define([
                                 doc.body.setAttribute("contenteditable", "true");
                                 var patch = (DD).diff(inner, doc.body);
                                 (DD).apply(inner, patch);
-
+                                editor.execCommand('xwiki-refresh');
                                 callback();
                                 onLocal();
                             }
@@ -473,8 +494,8 @@ define([
                 var shjson2 = stringifyDOM(inner);
                 if (shjson2 !== shjson) {
                     console.error("shjson2 !== shjson");
-                    console.log(shjson2);
-                    console.log(shjson);
+                    var diff = TextPatcher.diff(shjson, shjson2);
+                    TextPatcher.log(shjson, diff);
                     module.patchText(shjson2);
                 }
             };
@@ -717,7 +738,14 @@ define([
                 $iframe.length &&
                 $iframe[0].contentWindow &&
                 $iframe[0].contentWindow.body) {
-                return whenReady(window.CKEDITOR.instances.content, $iframe[0]);
+                var editor = window.CKEDITOR.instances.content;
+                if (editor.status === "ready") {
+                    whenReady(editor, $iframe[0]);
+                } else {
+                    editor.on('instanceReady', function() { whenReady(editor, $iframe[0]); });
+                }
+                return;
+                //return whenReady(window.CKEDITOR.instances.content, $iframe[0]);
             }
             setTimeout(untilThen, 100);
         };
