@@ -242,6 +242,7 @@ define([
             var inner = window.inner = iframe.contentWindow.body;
             var innerDoc = window.innerDoc = iframe.contentWindow.document;
             var cursor = window.cursor = Cursor(inner);
+            var initializing = true;
 
             //editor.plugins.magicline.backdoor.that.line.$.setAttribute('class', 'rt-non-realtime');
             var ml = editor.plugins.magicline.backdoor.that.line.$;
@@ -256,6 +257,7 @@ define([
                 }
                 setTimeout(fixMagicLine, 100);
             }*/
+            var afterRefresh = [];
             // User position indicator style
             var userIconStyle = [
                 '<style>',
@@ -278,9 +280,19 @@ define([
                 inner = iframe.contentWindow.body;
                 innerDoc = iframe.contentWindow.document;
                 $('head', innerDoc).append(userIconStyle);
-                //fixMagicLine();
             };
             addStyle();
+
+            editor.on('afterCommandExec', function(evt) {
+                if (evt && evt.data && evt.data.name && evt.data.name === "xwiki-refresh") {
+                    initializing = false;
+                    if (onLocal) { onLocal(); }
+                    afterRefresh.forEach(function (el) {
+                        el();
+                    });
+                    afterRefresh = [];
+                }
+            });
             // Add the style again when modifying a macro (which reloads the iframe)
             iframe.onload = addStyle;
 
@@ -367,8 +379,6 @@ define([
                 }
             };
 
-
-            var initializing = true;
             var userData = {}; // List of pretty name of all users (mapped with their server ID)
             var userList; // List of users still connected to the channel (server IDs)
             var myId;
@@ -441,9 +451,18 @@ define([
                                     doc.body.setAttribute("contenteditable", "true");
                                     var patch = (DD).diff(inner, doc.body);
                                     (DD).apply(inner, patch);
-                                    editor.execCommand('xwiki-refresh');
-                                    callback();
-                                    onLocal();
+
+                                    // If available, transform the HTML comments for XWiki macros into macros before saving (<!--startmacro:{...}-->).
+                                    // We can do that by using the "xwiki-refresh" command provided the by CkEditor Integration application.
+                                    if (editor.plugins['xwiki-macro']) {
+                                        initializing = true;
+                                        editor.execCommand('xwiki-refresh');
+                                        afterRefresh.push(callback);
+                                    } else {
+                                        callback();
+                                        onLocal();
+                                    }
+
                                 });
                             } else {
                                 var doc = window.DOMDoc = (new DOMParser()).parseFromString(newText,"text/html");
@@ -452,9 +471,10 @@ define([
                                 doc.body.setAttribute("contenteditable", "true");
                                 var patch = (DD).diff(inner, doc.body);
                                 (DD).apply(inner, patch);
+
+                                initializing = true;
                                 editor.execCommand('xwiki-refresh');
-                                callback();
-                                onLocal();
+                                afterRefresh.push(callback);
                             }
                         },
                         getSaveValue: function() {
@@ -710,12 +730,10 @@ define([
 
             editor.on('change', function() {
                 Saver.destroyDialog();
-                Saver.setLocalEditFlag(true);
-                onLocal();
-                if (inner !== iframe.contentWindow.body) {
-                    console.log('New inner body');
-                    //inner = iframe.contentWindow.body;
+                if (!initializing) {
+                    Saver.setLocalEditFlag(true);
                 }
+                onLocal();
             });
 
             // export the typing tests to the window.
