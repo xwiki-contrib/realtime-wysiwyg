@@ -3,7 +3,6 @@ define([
     'RTFrontend_toolbar',
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
-    'RTFrontend_hyperscript',
     'RTFrontend_cursor',
     'RTFrontend_json_ot',
     'RTFrontend_userdata',
@@ -15,7 +14,7 @@ define([
     'RTFrontend_chainpad',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Hyperscript, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -25,7 +24,6 @@ define([
         version: '1.17',
         local: {},
         remote: {},
-        Hyperscript: Hyperscript,
         Hyperjson: Hyperjson
     };
     var wiki = encodeURIComponent(XWiki.currentWiki);
@@ -47,12 +45,11 @@ define([
     window.Hyperjson = Hyperjson;
 
     var hjsonToDom = window.hjsonToDom = function (H) {
-        return Hyperjson.callOn(H, Hyperscript);
+        return Hyperjson.toDOM(H);
     };
 
     var module = window.REALTIME_MODULE = {
-        Hyperjson: Hyperjson,
-        Hyperscript: Hyperscript
+        Hyperjson: Hyperjson
     };
 
     var uid = function () {
@@ -64,9 +61,8 @@ define([
         var isMac = ( typeof el.getAttribute === "function" &&
                       ( el.getAttribute('data-cke-hidden-sel') ||
                         ( el.getAttribute('class') &&
-                          (el.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler_container') !== -1 ||
+                          (/cke_widget_drag/.test(el.getAttribute('class')) ||
                            el.getAttribute('class').split(' ').indexOf('cke_image_resizer') !== -1) ) ) );
-        //if (isMac) { console.log("Prevent serialize macro stuff", el); }
         return isMac;
     };
     var isNonRealtime = function (el) {
@@ -250,13 +246,17 @@ define([
                 el.setAttribute('class', 'rt-non-realtime');
             }); 
             // Fix the magic line issue
-            /*var fixMagicLine = function () {
-                if(editor.plugins.magicline.backdoor) {
-                   console.log(editor.plugins.magicline.backdoor.that.line.$);
-                    return;
+            var fixMagicLine = function () {
+                if (editor.plugins.magicline) {
+                    var ml = editor.plugins.magicline.backdoor.that.line.$;
+                    [ml, ml.parentElement].forEach(function (el) {
+                        el.setAttribute('class', 'rt-non-realtime');
+                    });
+                } else {
+                    setTimeout(fixMagicLine, 100);
                 }
-                setTimeout(fixMagicLine, 100);
-            }*/
+
+            };
             var afterRefresh = [];
             // User position indicator style
             var userIconStyle = [
@@ -280,6 +280,7 @@ define([
                 inner = iframe.contentWindow.body;
                 innerDoc = iframe.contentWindow.document;
                 $('head', innerDoc).append(userIconStyle);
+                fixMagicLine();
             };
             addStyle();
 
@@ -291,6 +292,7 @@ define([
                         el();
                     });
                     afterRefresh = [];
+                    fixMagicLine();
                 }
             });
             // Add the style again when modifying a macro (which reloads the iframe)
@@ -324,9 +326,7 @@ define([
                             (info.node.getAttribute('class').split(' ').indexOf('cke_widget_drag_handler') !== -1 ||
                              info.node.getAttribute('class').split(' ').indexOf('cke_image_resizer') !== -1 ) ) {
                         //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
-                        //if (info.diff.action === "removeAttribute" && info.diff.name === "title") {
-                            return true;
-                        //}
+                        return true;
                     }
 
                     // The "style" attribute in the "body" contains the padding used to display the user position indicators.
@@ -386,16 +386,18 @@ define([
             var DD = new DiffDom(diffOptions);
 
             var fixMacros = function () {
-                var dataValues = {};
-                var $elements = $(innerDoc).find('[data-cke-widget-data]');
-                $elements.each(function (idx, el) {
-                    dataValues[idx] = $(el).attr('data-cke-widget-data');
-                });
-                editor.widgets.instances = {};
-                editor.widgets.checkWidgets();
-                $elements.each(function (idx, el) {
-                    $(el).attr('data-cke-widget-data', dataValues[idx]);
-                });
+                if ($(inner).find('.macro[data-cke-widget-data]')) {
+                    var dataValues = {};
+                    var $elements = $(innerDoc).find('[data-cke-widget-data]');
+                    $elements.each(function (idx, el) {
+                        dataValues[idx] = $(el).attr('data-cke-widget-data');
+                    });
+                    editor.widgets.instances = {};
+                    editor.widgets.checkWidgets();
+                    $elements.each(function (idx, el) {
+                        $(el).attr('data-cke-widget-data', dataValues[idx]);
+                    });
+                }
             }
 
             // apply patches, and try not to lose the cursor in the process!
@@ -427,6 +429,19 @@ define([
                 transformFunction : JsonOT.validate
             };
 
+            var findMacroComments = function(el) {
+                var arr = [];
+                for(var i = 0; i < el.childNodes.length; i++) {
+                    var node = el.childNodes[i];
+                    if(node.nodeType === 8 && node.data && /startmacro/.test(node.data)) {
+                        arr.push(node);
+                    } else {
+                        arr.push.apply(arr, findMacroComments(node));
+                    }
+                }
+                return arr;
+            };
+
             var createSaver = function (info) {
                 if(!DEMO_MODE) {
                     Saver.lastSaved.mergeMessage = Interface.createMergeMessageElement(toolbar.toolbar
@@ -436,6 +451,24 @@ define([
                     var saverCreateConfig = {
                         formId: "inline", // Id of the wiki page form
                         setTextValue: function(newText, toConvert, callback) {
+                            var andThen = function (data) {
+                                var doc = window.DOMDoc = (new DOMParser()).parseFromString(data,"text/html");
+                                cursor.update();
+                                doc.body.setAttribute("contenteditable", "true");
+                                var patch = (DD).diff(inner, doc.body);
+                                (DD).apply(inner, patch);
+
+                                // If available, transform the HTML comments for XWiki macros into macros before saving (<!--startmacro:{...}-->).
+                                // We can do that by using the "xwiki-refresh" command provided the by CkEditor Integration application.
+                                if (editor.plugins['xwiki-macro'] && findMacroComments(inner).length > 0) {
+                                    initializing = true;
+                                    editor.execCommand('xwiki-refresh');
+                                    afterRefresh.push(callback);
+                                } else {
+                                    callback();
+                                    onLocal();
+                                }
+                            };
                             if (toConvert) {
                                 $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', {
                                     wiki: wiki,
@@ -444,37 +477,10 @@ define([
                                     convert: true,
                                     text: newText
                                 }).done(function(data) {
-                                    var mydata = window.newDataCk = data
-                                    var doc = window.DOMDoc = (new DOMParser()).parseFromString(mydata,"text/html");
-
-                                    cursor.update();
-                                    doc.body.setAttribute("contenteditable", "true");
-                                    var patch = (DD).diff(inner, doc.body);
-                                    (DD).apply(inner, patch);
-
-                                    // If available, transform the HTML comments for XWiki macros into macros before saving (<!--startmacro:{...}-->).
-                                    // We can do that by using the "xwiki-refresh" command provided the by CkEditor Integration application.
-                                    if (editor.plugins['xwiki-macro']) {
-                                        initializing = true;
-                                        editor.execCommand('xwiki-refresh');
-                                        afterRefresh.push(callback);
-                                    } else {
-                                        callback();
-                                        onLocal();
-                                    }
-
+                                    andThen(data);
                                 });
                             } else {
-                                var doc = window.DOMDoc = (new DOMParser()).parseFromString(newText,"text/html");
-
-                                cursor.update();
-                                doc.body.setAttribute("contenteditable", "true");
-                                var patch = (DD).diff(inner, doc.body);
-                                (DD).apply(inner, patch);
-
-                                initializing = true;
-                                editor.execCommand('xwiki-refresh');
-                                afterRefresh.push(callback);
+                                andThen(newText);
                             }
                         },
                         getSaveValue: function() {
@@ -502,8 +508,6 @@ define([
                 if (initializing) { return; }
 
                 var shjson = info.realtime.getUserDoc();
-                //console.log(shjson); TODO
-                //console.log(stringifyDOM(inner));
 
                 // remember where the cursor is
                 cursor.update();
@@ -667,9 +671,11 @@ define([
                     transformFunction : JsonOT.validate,
                     editor : 'rtwysiwyg',
                     getCursor : function() {
-                        var selection = editor.getSelection().getRanges();
-                        if (!selection || !selection[0]) { return ""; }
-                        var node = selection[0].startContainer.$;
+                        var selection = editor.getSelection();
+                        if (!selection) { return ""; }
+                        var ranges = selection.getRanges();
+                        if (!ranges || !ranges[0] || !ranges[0].startContainer || !ranges[0].startContainer.$) { return ""; }
+                        var node = ranges[0].startContainer.$;
                         node = (node.nodeName === "#text") ? node.parentNode : node;
                         var xpath = getXPath(node);
                         return xpath;
