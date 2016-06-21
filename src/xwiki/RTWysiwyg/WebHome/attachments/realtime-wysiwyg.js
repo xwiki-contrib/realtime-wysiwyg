@@ -681,6 +681,8 @@ define([
                         return xpath;
                     }
                 };
+                if (!displayAvatarInMargin || displayAvatarInMargin == 0) { delete userdataConfig.getCursor; }
+
                 userData = UserData.start(info.network, userdataChannel, userdataConfig);
                 userList.change.push(changeUserIcons);
 
