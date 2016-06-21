@@ -21,7 +21,7 @@ define([
     /* REALTIME_DEBUG exposes a 'version' attribute.
         this must be updated with every release */
     var REALTIME_DEBUG = window.REALTIME_DEBUG = {
-        version: '1.17',
+        version: '1.18',
         local: {},
         remote: {},
         Hyperjson: Hyperjson
