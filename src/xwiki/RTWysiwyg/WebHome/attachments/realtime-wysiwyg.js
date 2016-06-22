@@ -528,7 +528,11 @@ define([
                 var $bar = $('#cke_1_toolbox');
                 userList = info.userList;
                 var config = {
-                    userData: userData
+                    userData: userData,
+                    onUsernameClick: function (id) {
+                        var basehref = iframe.contentWindow.location.href.split('#')[0] || "";
+                        iframe.contentWindow.location.href = basehref + "#rt-user-" + id;
+                    }
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
             };
