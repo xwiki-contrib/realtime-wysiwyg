@@ -12,9 +12,10 @@ define([
     'RTFrontend_interface',
     'RTFrontend_saver',
     'RTFrontend_chainpad',
+    'RTFrontend_crypto',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad, Crypto) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -29,13 +30,6 @@ define([
     var wiki = encodeURIComponent(XWiki.currentWiki);
     var space = encodeURIComponent(XWiki.currentSpace);
     var page = encodeURIComponent(XWiki.currentPage);
-
-    // Create a fake "Crypto" object which will be passed to realtime-input
-    var Crypto = {
-        encrypt : function(msg, key) { return msg; },
-        decrypt : function(msg, key) { return msg; },
-        parseKey : function(key) { return {cryptKey : ''}; }
-    }
 
     var stringify = function (obj) {
         return JSONSortify(obj);
