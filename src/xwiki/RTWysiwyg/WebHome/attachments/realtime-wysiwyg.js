@@ -104,7 +104,7 @@ define([
         return hj;
     };
     var bodyFilter = function (hj) {
-        if (hj[0] === "BODY#body") {
+        if (hj[0] === "BODY") {
             // The "style" contains the padding created for the user position indicators.
             // We don't want to share that value since it is related to the new userdata channel and not the content channel.
             hj[1].style = undefined;
