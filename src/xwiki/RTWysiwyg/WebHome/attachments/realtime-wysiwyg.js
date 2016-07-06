@@ -650,41 +650,47 @@ define([
                 for (var i=0; i<activeUsers.length; i++) {
                     var id = activeUsers[i];
                     var data = updatedData[id];
-                    if (!data) { return; }
-                    var name = getPrettyName (data.name);
+                    if (data) {
+                        var name = getPrettyName (data.name);
 
-                    // Set the user position
-                    var element = undefined; // If not declared as undefined, it keeps the previous value from the loop
-                    if (data.cursor_rtwysiwyg) {
-                        element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
-                    }
-                    if (element) {
-                        var pos = $(element).offset();
-                        if (!positions[pos.top]) {
-                            positions[pos.top] = [id];
-                        } else {
-                            positions[pos.top].push(id);
+                        // Set the user position
+                        var element = undefined; // If not declared as undefined, it keeps the previous value from the loop
+                        if (data.cursor_rtwysiwyg) {
+                            element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
                         }
-                        var index = positions[pos.top].length - 1;
-                        var posTop = pos.top + 3;
-                        var posLeft = index * 16;
-                        requiredPadding = Math.max(requiredPadding, (posLeft+10));
-                        var $indicator;
-                        if (data.avatar) {
-                            $indicator = $('<img src="' + data.avatar + '?width=15" alt="" />');
-                        } else {
-                            $indicator = $('<div>' + name.substr(0,1) + '</div>');
+                        if (element) {
+                            var pos = $(element).offset();
+                            if (!positions[pos.top]) {
+                                positions[pos.top] = [id];
+                            } else {
+                                positions[pos.top].push(id);
+                            }
+                            var index = positions[pos.top].length - 1;
+                            var posTop = pos.top + 3;
+                            var posLeft = index * 16;
+                            requiredPadding = Math.max(requiredPadding, (posLeft+10));
+                            var $indicator;
+                            if (data.avatar) {
+                                $indicator = $('<img src="' + data.avatar + '?width=15" alt="" />');
+                            } else {
+                                $indicator = $('<div>' + name.substr(0,1) + '</div>');
+                            }
+                            $indicator.addClass("rt-non-realtime rt-user-position");
+                            $indicator.attr("contenteditable", "false");
+                            $indicator.attr("id", "rt-user-" + id);
+                            $indicator.attr("title", name);
+                            $indicator.css({
+                                "left" : posLeft + "px",
+                                "top" : posTop + "px"
+                            });
+                            $('html', innerDoc).append($indicator);
                         }
-                        $indicator.addClass("rt-non-realtime rt-user-position");
-                        $indicator.attr("contenteditable", "false");
-                        $indicator.attr("id", "rt-user-" + id);
-                        $indicator.attr("title", name);
-                        $indicator.css({
-                            "left" : posLeft + "px",
-                            "top" : posTop + "px"
-                        });
-                        $('html', innerDoc).append($indicator);
                     }
+                }
+
+                if (requiredPadding === 0) {
+                    $(inner).css("padding-left", '');
+                    return;
                 }
                 requiredPadding += 15;
                 $(inner).css("padding-left", requiredPadding+'px');
@@ -746,6 +752,8 @@ define([
                 Saver.stop();
                 toolbar.failed();
                 toolbar.toolbar.remove();
+                if (userData.leave && typeof userData.leave === "function") { userData.leave(); }
+                changeUserIcons({});
                 if($disallowButton[0].checked && !module.aborted) {
                     ErrorBox.show('disconnected');
                 }
