@@ -516,6 +516,8 @@ define([
                                     text: newText
                                 }).done(function(data) {
                                     andThen(data);
+                                }).fail(function(err){
+                                    module.onAbort(null, 'converthtml');
                                 });
                             } else {
                                 andThen(newText);
@@ -536,7 +538,8 @@ define([
                         userName: userName,
                         network: info.network,
                         channel: eventsChannel,
-                        demoMode: DEMO_MODE
+                        demoMode: DEMO_MODE,
+                        safeCrash: function(reason) { module.onAbort(null, reason); }
                     };
                     Saver.create(saverCreateConfig);
                 }
@@ -744,8 +747,9 @@ define([
                 createSaver(info);
             };
 
-            var onAbort = module.onAbort = realtimeOptions.onAbort = function (info) {
+            var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason) {
                 console.log("Aborting the session!");
+                var msg = reason || 'disconnected';
                 module.realtime.abort();
                 module.leaveChannel();
                 module.aborted = true;
@@ -755,7 +759,7 @@ define([
                 if (userData.leave && typeof userData.leave === "function") { userData.leave(); }
                 changeUserIcons({});
                 if($disallowButton[0].checked && !module.aborted) {
-                    ErrorBox.show('disconnected');
+                    ErrorBox.show(msg);
                 }
             };
 
