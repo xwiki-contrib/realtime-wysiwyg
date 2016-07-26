@@ -23,6 +23,27 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
     require.config({paths:PATHS});
 
+    // XWiki >= 8.2?
+    var isUsingDefaultCK = function () {
+        // Get the wiki version
+        var v= [];
+        if ("$!xwiki.version".length) {
+            v = "$xwiki.version".split(".");
+        }
+
+        // Is that a valid XWiki version?
+        if (v.length < 2) { return false; }
+        // XWiki major version should be at least 8
+        if (parseInt(v[0]) < 8) { return false; }
+        // XWiki >= 8.2 (exclude RC and milestone versions)
+        if (parseInt(v[1]).toString() !== v[1] && parseInt(v[1]) === 2) { return false; }
+        if (parseInt(v[1]) < 2) { return false; }
+
+        return true;
+    }
+
+    var defaultCk = isUsingDefaultCK();
+
     var usingCK = function () {
         /*  we can't rely on XWiki.editor to give an accurate response,
             nor can we expect certain scripts or stylesheets to exist
@@ -33,7 +54,9 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
             http://jira.xwiki.org/browse/CKEDITOR-46 provides hooks, but these
             will not exist in older versions of XWiki.
         */
-        return (/sheet=CKEditor/.test(window.location.href));
+
+        return ( /sheet=CKEditor/.test(window.location.href) ||
+                  (defaultCk && window.XWiki.editor === 'wysiwyg') );
     };
 
     var launchRealtime = function (config, keys) {
@@ -70,7 +93,11 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     };
 
     var getWysiwygLock = function () {
-        var force = document.querySelectorAll('a[href*="editor=inline"][href*="sheet=CKEditor.EditSheet"][href*="force=1"][href*="/edit/"]');
+        var selector = 'a[href*="editor=inline"][href*="sheet=CKEditor.EditSheet"][href*="force=1"][href*="/edit/"]';
+        if (defaultCk) {
+            selector = 'a[href*="editor=wysiwyg"][href*="force=1"][href*="/edit/"]';
+        }
+        var force = document.querySelectorAll(selector);
         return force.length? true : false;
     };
 
@@ -79,7 +106,7 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
 
     var info = {
         type: 'rtwysiwyg',
-        href: '&editor=inline&sheet=CKEditor.EditSheet&force=1',
+        href: defaultCk ? '&editor=wysiwyg&force=1' : '&editor=inline&sheet=CKEditor.EditSheet&force=1',
         name: "WYSIWYG"
     };
 

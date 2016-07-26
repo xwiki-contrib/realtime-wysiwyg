@@ -487,7 +487,7 @@ define([
                         saverConfig.messages);
                     Saver.setLastSavedContent(editor._.previousModeData);
                     var saverCreateConfig = {
-                        formId: "inline", // Id of the wiki page form
+                        formId: window.XWiki.editor === "wysiwyg" ? "edit" : "inline", // Id of the wiki page form
                         setTextValue: function(newText, toConvert, callback) {
                             var andThen = function (data) {
                                 var doc = window.DOMDoc = (new DOMParser()).parseFromString(data,"text/html");
