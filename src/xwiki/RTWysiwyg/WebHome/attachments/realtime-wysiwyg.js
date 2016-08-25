@@ -763,6 +763,22 @@ define([
                 }
             };
 
+            var onConnectionChange = realtimeOptions.onConnectionChange = function (info) {
+                setEditable(info.state);
+                console.log("Connection status : "+info.state);
+                toolbar.failed();
+                if (info.state) {
+                    ErrorBox.hide();
+                    initializing = true;
+                    toolbar.reconnecting(info.myId);
+                    // TODO: update the lastSavedVersion in saver.js :
+                    // the document may have been saved while we were offline
+                } else {
+                    ErrorBox.show('disconnected');
+                }
+            };
+
+
             var onLocal = realtimeOptions.onLocal = function () {
                 if (initializing) { return; }
 
