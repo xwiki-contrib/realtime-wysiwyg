@@ -157,6 +157,28 @@ define([
         var eventsChannel = docKeys.events;
         var userdataChannel = docKeys.userdata;
 
+        /** Update the channels keys for reconnecting websocket */
+        var firstConnection = true;
+        var updateKeys = function (cb) {
+            docKeys._update(function (keys) {
+                var changes = [];
+                if (keys.rtwysiwyg && keys.rtwysiwyg !== channel) {
+                    channel = keys.rtwysiwyg;
+                    changes.push('rtwysiwyg');
+                }
+                if (keys.events && keys.events !== eventsChannel) {
+                    eventsChannel = keys.events;
+                    changes.push('events');
+                }
+                if (keys.userdata && keys.userdata !== userdataChannel) {
+                    userdataChannel = keys.userdata;
+                    changes.push('userdata');
+                }
+                cb(changes);
+            });
+        };
+
+
         // TOOLBAR style
         var TOOLBAR_CLS = Toolbar.TOOLBAR_CLS;
         var DEBUG_LINK_CLS = Toolbar.DEBUG_LINK_CLS;
@@ -745,6 +767,7 @@ define([
 
                 onLocal();
                 createSaver(info);
+                firstConnection = false;
             };
 
             var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason) {
@@ -770,19 +793,20 @@ define([
                     ErrorBox.hide();
                     initializing = true;
                     toolbar.reconnecting(info.myId);
-										// If we were the only user in the channel, it was removed from the server when disconnecting
-										// TODO: update the key before trying to join the channel...
-										// Require change in chainpad-netflux?
                 } else {
-										setEditable(false);
+                    setEditable(false);
                     ErrorBox.show('disconnected');
                 }
             };
 
+            var beforeReconnecting = realtimeOptions.beforeReconnecting = function (callback) {
+                updateKeys(function () {
+                    callback(channel, stringifyDOM(inner));
+                });
+            };
 
             var onLocal = realtimeOptions.onLocal = function () {
                 if (initializing) { return; }
-
                 // stringify the json and send it into chainpad
                 var shjson = stringifyDOM(inner);
                 module.patchText(shjson);

@@ -59,39 +59,6 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                   (defaultCk && window.XWiki.editor === 'wysiwyg') );
     };
 
-    var launchRealtime = function (config, keys) {
-        require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
-            if (RTWysiwyg && RTWysiwyg.main) {
-                RTWysiwyg.main(config, keys);
-                // Begin : Add the issue tracker icon
-                var untilThen = function () {
-                  var iframe = $('iframe');
-                  if (window.CKEDITOR &&
-                      window.CKEDITOR.instances &&
-                      window.CKEDITOR.instances.content &&
-                      iframe.length &&
-                      iframe[0].contentWindow &&
-                      iframe[0].contentWindow.body) {
-                      if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
-                        $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
-                      }
-
-                      // CKEditor seems to create IDs dynamically, and as such
-                      // you cannot rely on IDs for removing buttons after launch
-                      $('.cke_button__source').remove();
-                      return;
-                  }
-                  setTimeout(untilThen, 100);
-                };
-                /* wait for the existence of CKEDITOR before doing things...  */
-                untilThen();
-                // End issue tracker icon
-            } else {
-                console.error("Couldn't find RTWysiwyg.main, aborting");
-            }
-        });
-    };
-
     var getWysiwygLock = function () {
         var selector = 'a[href*="editor=inline"][href*="sheet=CKEditor.EditSheet"][href*="force=1"][href*="/edit/"]';
         if (defaultCk) {
@@ -147,14 +114,55 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         return keys;
     };
 
+    var updateKeys = function (cb) {
+        var config = Loader.getConfig();
+        var keysData = getKeyData(config);
+        Loader.getKeys(keysData, function(keysResultDoc) {
+            var keys = parseKeyData(config, keysResultDoc);
+            cb(keys);
+        });
+    };
+
+    var launchRealtime = function (config, keys) {
+        require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
+            if (RTWysiwyg && RTWysiwyg.main) {
+                keys._update = updateKeys;
+                RTWysiwyg.main(config, keys);
+                // Begin : Add the issue tracker icon
+                var untilThen = function () {
+                  var iframe = $('iframe');
+                  if (window.CKEDITOR &&
+                      window.CKEDITOR.instances &&
+                      window.CKEDITOR.instances.content &&
+                      iframe.length &&
+                      iframe[0].contentWindow &&
+                      iframe[0].contentWindow.body) {
+                      if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
+                        $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
+                      }
+
+                      // CKEditor seems to create IDs dynamically, and as such
+                      // you cannot rely on IDs for removing buttons after launch
+                      $('.cke_button__source').remove();
+                      return;
+                  }
+                  setTimeout(untilThen, 100);
+                };
+                /* wait for the existence of CKEDITOR before doing things...  */
+                untilThen();
+                // End issue tracker icon
+            } else {
+                console.error("Couldn't find RTWysiwyg.main, aborting");
+            }
+        });
+    };
+
     if (lock) {
         // found a lock link : check active sessions
         Loader.checkSessions(info);
     } else if (usingCK() || DEMO_MODE) {
         var config = Loader.getConfig();
-        var keysData = getKeyData(config);
-        Loader.getKeys(keysData, function(keysResultDoc) {
-            var keys = parseKeyData(config, keysResultDoc);
+        updateKeys(function (keys) {
             if(!keys.rtwysiwyg || !keys.events || !keys.userdata) {
                 ErrorBox.show('unavailable');
                 console.error("You are not allowed to create a new realtime session for that document.");
