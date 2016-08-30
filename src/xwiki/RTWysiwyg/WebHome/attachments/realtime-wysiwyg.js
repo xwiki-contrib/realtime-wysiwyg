@@ -158,7 +158,6 @@ define([
         var userdataChannel = docKeys.userdata;
 
         /** Update the channels keys for reconnecting websocket */
-        var firstConnection = true;
         var updateKeys = function (cb) {
             docKeys._update(function (keys) {
                 var changes = [];
@@ -767,7 +766,6 @@ define([
 
                 onLocal();
                 createSaver(info);
-                firstConnection = false;
             };
 
             var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason) {
