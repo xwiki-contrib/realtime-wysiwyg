@@ -140,7 +140,7 @@ define([
         var Messages = saverConfig.messages || {};
 
         var $configField = $('#realtime-frontend-getconfig');
-        var pasedConfig;
+        var parsedConfig;
         if ($configField.length) {
             try {
                 parsedConfig = JSON.parse($configField.html());
@@ -149,6 +149,7 @@ define([
             }
         }
         var displayAvatarInMargin = typeof parsedConfig !== "undefined" ? parseInt(parsedConfig.marginAvatar) : 0;
+        saverConfig.mergeContent = typeof parsedConfig !== "undefined" ? parseInt(parsedConfig.enableMerge) !== 0 : true;
 
         /** Key in the localStore which indicates realtime activity should be disallowed. */
         var LOCALSTORAGE_DISALLOW = editorConfig.LOCALSTORAGE_DISALLOW;
@@ -529,16 +530,21 @@ define([
                                 }
                             };
                             if (toConvert) {
-                                $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', {
+                                var object = {
                                     wiki: wiki,
                                     space: space,
                                     page: page,
                                     convert: true,
                                     text: newText
-                                }).done(function(data) {
+                                };
+                                $.post(htmlConverterUrl+'?xpage=plain&outputSyntax=plain', object).done(function(data) {
                                     andThen(data);
                                 }).fail(function(err){
-                                    module.onAbort(null, 'converthtml');
+                                    var debugLog = {
+                                        state: 'rtwysiwyg/convertHTML',
+                                        postData: object
+                                    };
+                                    module.onAbort(null, 'converthtml', JSON.stringify(debugLog));
                                 });
                             } else {
                                 andThen(newText);
@@ -560,7 +566,7 @@ define([
                         network: info.network,
                         channel: eventsChannel,
                         demoMode: DEMO_MODE,
-                        safeCrash: function(reason) { module.onAbort(null, reason); }
+                        safeCrash: function(reason, debugLog) { module.onAbort(null, reason, debugLog); }
                     };
                     Saver.create(saverCreateConfig);
                 }
@@ -768,7 +774,7 @@ define([
                 createSaver(info);
             };
 
-            var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason) {
+            var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason, debug) {
                 console.log("Aborting the session!");
                 var msg = reason || 'disconnected';
                 module.realtime.abort();
@@ -780,7 +786,7 @@ define([
                 if (userData.leave && typeof userData.leave === "function") { userData.leave(); }
                 changeUserIcons({});
                 if($disallowButton[0].checked && !module.aborted) {
-                    ErrorBox.show(msg);
+                    ErrorBox.show(msg, debug);
                 }
             };
 
