@@ -95,6 +95,9 @@ define([
                   hj[1].class.split(' ').indexOf('cke_image_resizer') ) ) {
             hj[1].title = undefined;
         }
+        if (hj[1]["aria-label"]) {
+            hj[1]["aria-label"] = undefined;
+        }
         return hj;
     };
     var bodyFilter = function (hj) {
@@ -385,6 +388,16 @@ define([
                         //console.log('Preventing removal of the drag&drop icon container of a macro', info.node);
                         return true;
                     }
+
+                    /*
+                        Don't change the aria-label properties because they depend on the browser language and they can create fights
+                    */
+                    if (info.diff && info.diff.name === "aria-label") {
+                        if (info.diff.action === "modifyAttribute" || info.diff.action === "removeAttribute" || info.diff.action === "addAttribute") {
+                            return true;
+                        }
+                    }
+
 
                     /*
                         Cursor indicators
