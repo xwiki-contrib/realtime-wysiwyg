@@ -496,10 +496,7 @@ define([
                 channel: channel,
 
                 // Crypto object to avoid loading it twice in Cryptpad
-                crypto: Crypto,
-
-                // really basic operational transform
-                transformFunction : JsonOT.validate
+                crypto: Crypto
             };
 
             var findMacroComments = function(el) {
@@ -759,7 +756,6 @@ define([
                     userAvatar : userAvatar,
                     onChange : userList.onChange,
                     crypto : Crypto,
-                    transformFunction : JsonOT.validate,
                     editor : 'rtwysiwyg',
                     getCursor : function() {
                         var selection = editor.getSelection();
