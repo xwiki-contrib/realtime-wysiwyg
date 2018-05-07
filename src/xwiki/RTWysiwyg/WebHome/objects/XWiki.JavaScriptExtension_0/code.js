@@ -141,9 +141,27 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                         $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
                       }
 
-                      // CKEditor seems to create IDs dynamically, and as such
-                      // you cannot rely on IDs for removing buttons after launch
-                      $('.cke_button__source').remove();
+                     var editor = window.CKEDITOR.instances.content;
+                     RTWysiwyg.currentMode = editor.mode;
+ 
+                     $('.cke_button__source').click(function() {
+                        // We need to stop autosaving
+                        window.lastSaved.wasEditedLocally = false;
+                        var checkSourceChange = setInterval(function() {
+                         console.log("Check");
+                         if (RTWysiwyg.currentMode!=editor.mode) {
+                           clearInterval(checkSourceChange);
+                           console.log("Ready");
+                           RTWysiwyg.currentMode = editor.mode;
+                           // when coming back to wysiwyg we need to make realtime 
+                           // pick up the changes. This code is still experimental.
+                           if (RTWysiwyg.currentMode==="wysiwyg") {
+                            window.lastSaved.wasEditedLocally = true;
+                            REALTIME_MODULE.realtimeOptions.onLocalFromSource();
+                           }
+                          }
+                        }, 100);
+                      });
                       return;
                   }
                   setTimeout(untilThen, 100);

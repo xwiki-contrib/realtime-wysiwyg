@@ -296,6 +296,7 @@ define([
                 '}',
                 '</style>'].join('\n');
             var addStyle = function() {
+                var iframe = jQuery('iframe')[0];
                 inner = iframe.contentWindow.body;
                 innerDoc = iframe.contentWindow.document;
                 $('head', innerDoc).append(userIconStyle);
@@ -318,7 +319,7 @@ define([
             iframe.onload = addStyle;
 
             var setEditable = module.setEditable = function (bool) {
-                inner.setAttribute('contenteditable', bool);
+                window.inner.setAttribute('contenteditable', bool);
             };
 
             // don't let the user edit until the pad is ready
@@ -410,6 +411,7 @@ define([
                         }
                     }
 
+                    var cursor = window.cursor;
                     // no use trying to recover the cursor if it doesn't exist
                     if (!cursor.exists()) { return; }
 
@@ -438,6 +440,7 @@ define([
                     }
                 },
                 postDiffApply: function (info) {
+                    var cursor = window.cursor;
                     if (info.frame) {
                         if (info.node) {
                             if (info.frame & 1) { cursor.fixStart(info.node); }
@@ -459,9 +462,9 @@ define([
             var DD = new DiffDom(diffOptions);
 
             var fixMacros = function () {
-                if ($(inner).find('.macro[data-cke-widget-data]')) {
+                if ($(window.inner).find('.macro[data-cke-widget-data]')) {
                     var dataValues = {};
-                    var $elements = $(innerDoc).find('[data-cke-widget-data]');
+                    var $elements = $(window.innerDoc).find('[data-cke-widget-data]');
                     $elements.each(function (idx, el) {
                         dataValues[idx] = $(el).attr('data-cke-widget-data');
                     });
@@ -477,8 +480,8 @@ define([
             var applyHjson = function (shjson) {
                 var userDocStateDom = hjsonToDom(JSON.parse(shjson));
                 userDocStateDom.setAttribute("contenteditable", "true"); // lol wtf
-                var patch = (DD).diff(inner, userDocStateDom);
-                (DD).apply(inner, patch);
+                var patch = (DD).diff(window.inner, userDocStateDom);
+                (DD).apply(window.inner, patch);
                 try { fixMacros(); } catch (e) { console.log("Unable to fix the macros", e); }
             };
 
@@ -523,14 +526,14 @@ define([
                         setTextValue: function(newText, toConvert, callback) {
                             var andThen = function (data) {
                                 var doc = window.DOMDoc = (new DOMParser()).parseFromString(data,"text/html");
-                                cursor.update();
+                                window.cursor.update();
                                 doc.body.setAttribute("contenteditable", "true");
-                                var patch = (DD).diff(inner, doc.body);
-                                (DD).apply(inner, patch);
+                                var patch = (DD).diff(window.inner, doc.body);
+                                (DD).apply(window.inner, patch);
 
                                 // If available, transform the HTML comments for XWiki macros into macros before saving (<!--startmacro:{...}-->).
                                 // We can do that by using the "xwiki-refresh" command provided the by CkEditor Integration application.
-                                if (editor.plugins['xwiki-macro'] && findMacroComments(inner).length > 0) {
+                                if (editor.plugins['xwiki-macro'] && findMacroComments(window.inner).length > 0) {
                                     initializing = true;
                                     editor.execCommand('xwiki-refresh');
                                     afterRefresh.push(callback);
@@ -588,12 +591,12 @@ define([
                 var shjson = info.realtime.getUserDoc();
 
                 // remember where the cursor is
-                cursor.update();
+                window.cursor.update();
 
                 // build a dom from HJSON, diff, and patch the editor
                 applyHjson(shjson);
 
-                var shjson2 = stringifyDOM(inner);
+                var shjson2 = stringifyDOM(window.inner);
                 if (shjson2 !== shjson) {
                     console.error("shjson2 !== shjson");
                     var diff = TextPatcher.diff(shjson, shjson2);
@@ -684,7 +687,7 @@ define([
 
                 var activeUsers = userList.users.slice(0);
 
-                $(innerDoc).find('.rt-user-position').remove();
+                $(window.innerDoc).find('.rt-user-position').remove();
                 var positions = REALTIME_DEBUG.positions = {};
                 var requiredPadding = 0;
                 for (var i=0; i<activeUsers.length; i++) {
@@ -696,7 +699,7 @@ define([
                         // Set the user position
                         var element = undefined; // If not declared as undefined, it keeps the previous value from the loop
                         if (data.cursor_rtwysiwyg) {
-                            element = innerDoc.evaluate(data.cursor_rtwysiwyg, innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
+                            element = window.innerDoc.evaluate(data.cursor_rtwysiwyg, window.innerDoc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null ).singleNodeValue;
                         }
                         if (element) {
                             var pos = $(element).offset();
@@ -723,17 +726,17 @@ define([
                                 "left" : posLeft + "px",
                                 "top" : posTop + "px"
                             });
-                            $('html', innerDoc).append($indicator);
+                            $('html', window.innerDoc).append($indicator);
                         }
                     }
                 }
 
                 if (requiredPadding === 0) {
-                    $(inner).css("padding-left", '');
+                    $(window.inner).css("padding-left", '');
                     return;
                 }
                 requiredPadding += 15;
-                $(inner).css("padding-left", requiredPadding+'px');
+                $(window.inner).css("padding-left", requiredPadding+'px');
             }
 
             var onReady = realtimeOptions.onReady = function (info) {
@@ -741,6 +744,7 @@ define([
 
                 var realtime = window.realtime = module.realtime = info.realtime;
                 module.leaveChannel = info.leave;
+                module.realtimeOptions = realtimeOptions;
                 module.patchText = TextPatcher.create({
                     realtime: realtime,
                     logging: false,
@@ -814,14 +818,25 @@ define([
 
             var beforeReconnecting = realtimeOptions.beforeReconnecting = function (callback) {
                 updateKeys(function () {
-                    callback(channel, stringifyDOM(inner));
+                    callback(channel, stringifyDOM(window.inner));
                 });
             };
+
+            // This function resets the realtime fields after coming back from source mode
+            var onLocalFromSource = realtimeOptions.onLocalFromSource = function () {
+                var iframe = jQuery('iframe')[0]; 
+                window.inner = iframe.contentWindow.body;
+                window.innerDoc = iframe.contentWindow.document;
+                window.cursor = Cursor(window.inner);
+                iframe.onload = addStyle;
+                addStyle();
+                onLocal();
+            }
 
             var onLocal = realtimeOptions.onLocal = function () {
                 if (initializing) { return; }
                 // stringify the json and send it into chainpad
-                var shjson = stringifyDOM(inner);
+                var shjson = stringifyDOM(window.inner);
                 module.patchText(shjson);
 
                 if (module.realtime.getUserDoc() !== shjson) {
@@ -838,7 +853,7 @@ define([
                 to push it out to the parent element, which ought to be a
                 paragraph tag. This needs to be done on keydown, otherwise
                 the first such keypress will not be inserted into the P. */
-            inner.addEventListener('keydown', cursor.brFix);
+            window.inner.addEventListener('keydown', window.cursor.brFix);
 
             editor.on('change', function() {
                 Saver.destroyDialog();
@@ -852,8 +867,8 @@ define([
             // call like `test = easyTest()`
             // terminate the test like `test.cancel()`
             var easyTest = window.easyTest = function () {
-                cursor.update();
-                var start = cursor.Range.start;
+                window.cursor.update();
+                var start = window.cursor.Range.start;
                 var test = TypingTest.testInput(inner, start.el, start.offset, onLocal);
                 onLocal();
                 return test;
