@@ -143,24 +143,28 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
 
                      var editor = window.CKEDITOR.instances.content;
                      RTWysiwyg.currentMode = editor.mode;
- 
+
                      $('.cke_button__source').click(function() {
                         // We need to stop autosaving
                         window.lastSaved.wasEditedLocally = false;
-                        var checkSourceChange = setInterval(function() {
-                         console.log("Check");
-                         if (RTWysiwyg.currentMode!=editor.mode) {
-                           clearInterval(checkSourceChange);
-                           console.log("Ready");
-                           RTWysiwyg.currentMode = editor.mode;
-                           // when coming back to wysiwyg we need to make realtime 
-                           // pick up the changes. This code is still experimental.
-                           if (RTWysiwyg.currentMode==="wysiwyg") {
-                            window.lastSaved.wasEditedLocally = true;
-                            REALTIME_MODULE.realtimeOptions.onLocalFromSource();
+                        console.log("Editor mode: " + editor.mode);
+                        if (RTWysiwyg.currentMode==="source") {                          
+                          var checkSourceChange = setInterval(function() {
+                           console.log("Check source tab closing");
+                           var iframe = jQuery('iframe')[0]; 
+                           if (editor.mode!=="source" && iframe && iframe.contentWindow && iframe.contentWindow.body)  {
+                             console.log("Ready to update realtime");
+                             clearInterval(checkSourceChange);
+                             RTWysiwyg.currentMode = editor.mode;
+                             // when coming back to wysiwyg we need to make realtime 
+                             // pick up the changes. This code is still experimental.
+                             window.lastSaved.wasEditedLocally = true;
+                             REALTIME_MODULE.realtimeOptions.onLocalFromSource();
                            }
-                          }
-                        }, 100);
+                          }, 100);
+                         } else {
+                           RTWysiwyg.currentMode = "source";
+                         }
                       });
                       return;
                   }
