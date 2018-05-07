@@ -13,17 +13,17 @@ as follows:
     npm install -g
 
     # then run the builder
-    ./do
+    ./xargen
 
     # and import the resulting XAR file.
 
 Alternatively you can build and import in one operation using:
 
-    ./do --post Admin:admin@mywikidomain.name:8080/xwiki
+    ./xargen --post Admin:admin@mywikidomain.name:8080/xwiki
 
 Or generate a Maven compatible build using:
 
-    ./do --mvn
+    ./xargen --mvn
 
 Issues: http://jira.xwiki.org/browse/RTWYSIWYG
 
