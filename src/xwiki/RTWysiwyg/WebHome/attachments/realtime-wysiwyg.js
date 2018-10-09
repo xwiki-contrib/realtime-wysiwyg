@@ -126,7 +126,7 @@ define([
         return stringify(Hyperjson.fromDOM(dom, shouldSerialize, hjFilter));
     };
 
-    var main = module.main = function (editorConfig, docKeys) {
+    var main = module.main = function (editorConfig, docKeys, useRt) {
 
         var WebsocketURL = editorConfig.WebsocketURL;
         var htmlConverterUrl = editorConfig.htmlConverterUrl;
@@ -220,7 +220,8 @@ define([
         // DISALLOW REALTIME
         var uid = Interface.uid;
         var allowRealtimeCbId = uid();
-        Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
+        Interface.realtimeAllowed(useRt);
+        //Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
         var checked = (Interface.realtimeAllowed()? 'checked="checked"' : '');
 
         Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
@@ -235,7 +236,7 @@ define([
             if (checked || DEMO_MODE) {
                 Interface.realtimeAllowed(true);
                 // TODO : join the RT session without reloading the page?
-                window.location.reload();
+                window.location.href = editorConfig.rtURL;
             } else {
                 Interface.realtimeAllowed(false);
                 module.onAbort();

@@ -73,16 +73,35 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
 
     var info = {
         type: 'rtwysiwyg',
-        href: defaultCk ? '&editor=wysiwyg&force=1' : '&editor=inline&sheet=CKEditor.EditSheet&force=1',
+        href: defaultCk ? '&editor=wysiwyg&force=1&realtime=1' : '&editor=inline&sheet=CKEditor.EditSheet&force=1&realtime=1',
         name: "WYSIWYG"
     };
+
+    var $saveButton = $('#mainEditArea').find('input[name="action_saveandcontinue"]');
+    var createRtCalled = false;
+    var createRt = function () {
+        if (createRtCalled) { return; }
+        createRtCalled = true;
+        if ($saveButton.length) {
+            $saveButton.click();
+            var onSaved = function () {
+                window.location.href = Loader.getEditorURL(window.location.href, info);
+            };
+            document.observe('xwiki:document:saved', onSaved);
+            document.observe('xwiki:document:saveFailed', function () {
+                setTimeout(function () {
+                    $saveButton.click();
+                }, 2000);
+            });
+        }
+    };
+    Loader.setAvailableRt('wysiwyg', info, createRt);
 
     var getKeyData = function(config) {
         return [
             {doc: config.reference, mod: config.language+'/events', editor: "1.0"},
             {doc: config.reference, mod: config.language+'/events', editor: "userdata"},
             {doc: config.reference, mod: config.language+'/content',editor: "rtwysiwyg"}
-
         ];
     };
 
@@ -123,11 +142,11 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         });
     };
 
-    var launchRealtime = function (config, keys) {
+    var launchRealtime = function (config, keys, realtime) {
         require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
             if (RTWysiwyg && RTWysiwyg.main) {
                 keys._update = updateKeys;
-                RTWysiwyg.main(config, keys);
+                RTWysiwyg.main(config, keys, realtime);
                 // Begin : Add the issue tracker icon
                 var untilThen = function () {
                   var iframe = $('iframe');
@@ -144,6 +163,7 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                      var editor = window.CKEDITOR.instances.content;
                      RTWysiwyg.currentMode = editor.mode;
 
+                     //$('.cke_button__source').remove();
                      $('.cke_button__source').click(function() {
                         // We need to stop autosaving
                         window.lastSaved.wasEditedLocally = false;
@@ -184,12 +204,14 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         Loader.checkSessions(info);
     } else if (usingCK() || DEMO_MODE) {
         var config = Loader.getConfig();
+        config.rtURL = Loader.getEditorURL(window.location.href, info);
         updateKeys(function (keys) {
             if(!keys.rtwysiwyg || !keys.events || !keys.userdata) {
                 ErrorBox.show('unavailable');
                 console.error("You are not allowed to create a new realtime session for that document.");
             }
             if (Object.keys(keys.active).length > 0) {
+                // Should only happen when there is a realtime session with another editor (wiki, inline...)
                 if (keys.rtwysiwyg_users > 0 || Loader.isForced) {
                     launchRealtime(config, keys);
                 } else {
@@ -200,7 +222,10 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                     Loader.displayModal("rtwysiwyg", Object.keys(keys.active), callback, info);
                 }
             } else {
-                launchRealtime(config, keys);
+                // 3rd argument is "force realtime"
+                var realtime = keys.rtwysiwyg_users > 0 || Loader.isRt;
+                Loader.isRt = realtime;
+                launchRealtime(config, keys, realtime);
             }
         });
     }
@@ -215,14 +240,43 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
             $(button).on('click', function() {
                 window.location.href = Loader.getEditorURL(window.location.href, info);
             });
-        } else if(lock && wysiwygLock) {
+        } else if(lock) {
             var button = new Element('button', {'class': 'btn btn-primary'});
             var br =  new Element('br');
             button.insert(Loader.messages.redirectDialog_create.replace(/\{0\}/g, "Wysiwyg"));
             $('.realtime-buttons').append(br);
             $('.realtime-buttons').append(button);
+            var modal = $('.realtime-buttons').data('modal');
             $(button).on('click', function() {
-                window.location.href = Loader.getEditorURL(window.location.href, info);
+                modal.closeDialog();
+                var cb = function () {
+                    window.location.href = Loader.getEditorURL(window.location.href, info);
+                };
+                Loader.requestRt('wysiwyg', function (state) {
+                    if (state === false || state === 2) {
+                        // false: Nobody in the channel
+                        // 2: Rt should already exist
+                        console.error(state === false ? "EEMPTY" : "EEXISTS"); // FIXME
+                        window.location.href = Loader.getEditorURL(window.location.href, info);
+                        return;
+                    }
+                    if (state === 1) {
+                        // Accepted
+                        var whenReady = function (cb) {
+                            updateKeys(function (k) {
+                                if (k.rtwysiwyg_users > 0) { return void cb(); }
+                                setTimeout(function () {
+                                    whenReady(cb);
+                                }, 1000);
+                            });
+                        };
+                        whenReady(function () {
+                            var i = {href: defaultCk ? '&editor=wysiwyg' : '&editor=inline&sheet=CKEditor.EditSheet'};
+                            window.location.href = Loader.getEditorURL(window.location.href, i);
+                        });
+                        return;
+                    }
+                });
             });
         }
     };
