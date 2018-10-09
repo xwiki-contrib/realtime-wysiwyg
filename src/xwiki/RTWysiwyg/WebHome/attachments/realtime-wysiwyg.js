@@ -794,6 +794,7 @@ define([
                 module.realtime.abort();
                 module.leaveChannel();
                 module.aborted = true;
+                editorConfig.abort();
                 Saver.stop();
                 toolbar.failed();
                 toolbar.toolbar.remove();
