@@ -74,7 +74,8 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     var info = {
         type: 'rtwysiwyg',
         href: defaultCk ? '&editor=wysiwyg&force=1&realtime=1' : '&editor=inline&sheet=CKEditor.EditSheet&force=1&realtime=1',
-        name: "WYSIWYG"
+        name: "WYSIWYG",
+        compatible: ['wysiwyg', 'wiki']
     };
 
     var $saveButton = $('#mainEditArea').find('input[name="action_saveandcontinue"]');
