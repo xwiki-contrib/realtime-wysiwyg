@@ -752,6 +752,7 @@ define([
                 $(window.inner).css("padding-left", requiredPadding+'px');
             }
 
+            var first = true;
             var onReady = realtimeOptions.onReady = function (info) {
                 if (!initializing) { return; }
 
@@ -766,29 +767,32 @@ define([
 
                 myId = info.myId;
 
-                // Update the user list to link the wiki name to the user id
-                var userdataConfig = {
-                    myId : info.myId,
-                    userName : userName,
-                    userAvatar : userAvatar,
-                    onChange : userList.onChange,
-                    crypto : Crypto,
-                    editor : 'rtwysiwyg',
-                    getCursor : function() {
-                        var selection = editor.getSelection();
-                        if (!selection) { return ""; }
-                        var ranges = selection.getRanges();
-                        if (!ranges || !ranges[0] || !ranges[0].startContainer || !ranges[0].startContainer.$) { return ""; }
-                        var node = ranges[0].startContainer.$;
-                        node = (node.nodeName === "#text") ? node.parentNode : node;
-                        var xpath = getXPath(node);
-                        return xpath;
-                    }
-                };
-                if (!displayAvatarInMargin || displayAvatarInMargin == 0) { delete userdataConfig.getCursor; }
+                if (first === true) {
+                    first = false;
+                    // Update the user list to link the wiki name to the user id
+                    var userdataConfig = {
+                        myId : info.myId,
+                        userName : userName,
+                        userAvatar : userAvatar,
+                        onChange : userList.onChange,
+                        crypto : Crypto,
+                        editor : 'rtwysiwyg',
+                        getCursor : function() {
+                            var selection = editor.getSelection();
+                            if (!selection) { return ""; }
+                            var ranges = selection.getRanges();
+                            if (!ranges || !ranges[0] || !ranges[0].startContainer || !ranges[0].startContainer.$) { return ""; }
+                            var node = ranges[0].startContainer.$;
+                            node = (node.nodeName === "#text") ? node.parentNode : node;
+                            var xpath = getXPath(node);
+                            return xpath;
+                        }
+                    };
+                    if (!displayAvatarInMargin || displayAvatarInMargin == 0) { delete userdataConfig.getCursor; }
 
-                userData = UserData.start(info.network, userdataChannel, userdataConfig);
-                userList.change.push(changeUserIcons);
+                    userData = UserData.start(info.network, userdataChannel, userdataConfig);
+                    userList.change.push(changeUserIcons);
+                }
 
                 applyHjson(shjson);
 
