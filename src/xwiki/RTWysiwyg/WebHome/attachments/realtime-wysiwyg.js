@@ -572,7 +572,12 @@ define([
                             });
                         },
                         getTextValue: function() {
-                            return editor.getData();
+                            try {
+                                return editor.getData();
+                            } catch (e) {
+                                editor.showNotification(Messages.ckError, 'warning');
+                                return null;
+                            }
                         },
                         realtime: info.realtime,
                         userList: info.userList,
