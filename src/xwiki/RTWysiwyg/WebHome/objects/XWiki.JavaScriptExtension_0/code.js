@@ -278,14 +278,20 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
             var button = new Element('button', {'class': 'btn btn-primary'});
             var br =  new Element('br');
             button.insert(Loader.messages.redirectDialog_create.replace(/\{0\}/g, "Wysiwyg"));
-            $('.realtime-buttons').append(br);
-            $('.realtime-buttons').append(button);
-            var modal = $('.realtime-buttons').data('modal');
+            var buttons = $('.realtime-buttons');
+            buttons.append(br).append(button);
+            var modal = buttons.data('modal');
             $(button).on('click', function() {
-                modal.closeDialog();
-                var cb = function () {
-                    window.location.href = Loader.getEditorURL(window.location.href, info);
-                };
+                //modal.closeDialog();
+                buttons.find('button').hide();
+                var waiting = $('<div>', {style:'text-align:center;'}).appendTo(buttons);
+                waiting.append($('<span>', {
+                    'class': 'fa fa-spinner fa-2x fa-spin',
+                    style: 'vertical-align: middle'
+                }));
+                waiting.append($('<span>', {
+                    style: 'vertical-align: middle'
+                }).text(Loader.messages.waiting));
                 Loader.requestRt('wysiwyg', function (state) {
                     if (state === false || state === 2) {
                         // false: Nobody in the channel
