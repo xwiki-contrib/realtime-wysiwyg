@@ -143,56 +143,61 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         });
     };
 
+    var whenCkReady = function (cb) {
+        var iframe = $('iframe');
+        if (window.CKEDITOR &&
+          window.CKEDITOR.instances &&
+          window.CKEDITOR.instances.content &&
+          iframe.length &&
+          iframe[0].contentWindow &&
+          iframe[0].contentWindow.body) {
+            return void cb();
+        }
+        setTimeout(function () {
+            whenCkReady(cb);
+        }, 100);
+    };
     var launchRealtime = function (config, keys, realtime) {
         require(['jquery', 'RTWysiwyg_WebHome_realtime_netflux'], function ($, RTWysiwyg) {
             if (RTWysiwyg && RTWysiwyg.main) {
                 keys._update = updateKeys;
                 RTWysiwyg.main(config, keys, realtime);
                 // Begin : Add the issue tracker icon
-                var untilThen = function () {
-                  var iframe = $('iframe');
-                  if (window.CKEDITOR &&
-                      window.CKEDITOR.instances &&
-                      window.CKEDITOR.instances.content &&
-                      iframe.length &&
-                      iframe[0].contentWindow &&
-                      iframe[0].contentWindow.body) {
-                      if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
+                whenCkReady(function () {
+                    if(ISSUE_TRACKER_URL && ISSUE_TRACKER_URL.trim() !== '') {
                         $('#cke_1_toolbox').append('<span id="RTWysiwyg_issueTracker" class="cke_toolbar" role="toolbar"><span class="cke_toolbar_start"></span><span class="cke_toolgroup"><a href="'+ISSUE_TRACKER_URL+'" target="_blank" class="cke_button cke_button_off" title="Report a bug" tabindex="-1" hidefocus="true" role="button" aria-haspopup="false"><span style="font-family: FontAwesome;cursor:default;" class="fa fa-bug"></span></a></span><span class="cke_toolbar_end"></span></span>');
-                      }
+                    }
 
-                     var editor = window.CKEDITOR.instances.content;
-                     RTWysiwyg.currentMode = editor.mode;
+                    var editor = window.CKEDITOR.instances.content;
+                    RTWysiwyg.currentMode = editor.mode;
 
-                     //$('.cke_button__source').remove();
-                     $('.cke_button__source').click(function() {
+                    //$('.cke_button__source').remove();
+                    $('.cke_button__source').click(function() {
                         // We need to stop autosaving
                         window.lastSaved.wasEditedLocally = false;
                         console.log("Editor mode: " + editor.mode);
-                        if (RTWysiwyg.currentMode==="source") {                          
-                          var checkSourceChange = setInterval(function() {
-                           console.log("Check source tab closing");
-                           var iframe = jQuery('iframe')[0]; 
-                           if (editor.mode!=="source" && iframe && iframe.contentWindow && iframe.contentWindow.body)  {
-                             console.log("Ready to update realtime");
-                             clearInterval(checkSourceChange);
-                             RTWysiwyg.currentMode = editor.mode;
-                             // when coming back to wysiwyg we need to make realtime 
-                             // pick up the changes. This code is still experimental.
-                             window.lastSaved.wasEditedLocally = true;
-                             REALTIME_MODULE.realtimeOptions.onLocalFromSource();
-                           }
-                          }, 100);
-                         } else {
-                           RTWysiwyg.currentMode = "source";
-                         }
-                      });
-                      return;
-                  }
-                  setTimeout(untilThen, 100);
-                };
-                /* wait for the existence of CKEDITOR before doing things...  */
-                untilThen();
+                        if (RTWysiwyg.currentMode==="source") {
+                            var checkSourceChange = setInterval(function() {
+                                console.log("Check source tab closing");
+                                var iframe = jQuery('iframe')[0];
+                                if (editor.mode!=="source" &&
+                                  iframe && iframe.contentWindow &&
+                                  iframe.contentWindow.body) {
+                                    console.log("Ready to update realtime");
+                                    clearInterval(checkSourceChange);
+                                    RTWysiwyg.currentMode = editor.mode;
+                                    // when coming back to wysiwyg we need to make realtime 
+                                    // pick up the changes. This code is still experimental.
+                                    window.lastSaved.wasEditedLocally = true;
+                                    REALTIME_MODULE.realtimeOptions.onLocalFromSource();
+                                }
+                            }, 100);
+                        } else {
+                            RTWysiwyg.currentMode = "source";
+                        }
+                    });
+                    return;
+                });
                 // End issue tracker icon
             } else {
                 console.error("Couldn't find RTWysiwyg.main, aborting");
@@ -200,33 +205,61 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         });
     };
 
+    var lockCk = function () {
+        var iframe = jQuery('iframe')[0];
+        var inner = iframe.contentWindow.body;
+        inner.setAttribute('contenteditable', false);
+    };
+    var unlockCk = function () {
+        var iframe = jQuery('iframe')[0];
+        var inner = iframe.contentWindow.body;
+        inner.setAttribute('contenteditable', true);
+    };
+
     if (lock) {
         // found a lock link : check active sessions
         Loader.checkSessions(info);
     } else if (usingCK() || DEMO_MODE) {
-        var config = Loader.getConfig();
-        config.rtURL = Loader.getEditorURL(window.location.href, info);
+        var todo = function (keys, needRt) {
+            if (!needRt) {
+                var config = Loader.getConfig();
+                config.rtURL = Loader.getEditorURL(window.location.href, info);
+                return void launchRealtime(config, keys);
+            }
+            var done = false;
+            whenCkReady(function () {
+                if (done) { return; }
+                setTimeout(lockCk);
+            });
+            Loader.whenReady(function (wsAvailable) {
+                done = true;
+                var config = Loader.getConfig();
+                config.rtURL = Loader.getEditorURL(window.location.href, info);
+                // 3rd argument is "enable realtime"
+                Loader.isRt = wsAvailable;
+                if (!wsAvailable) { setTimeout(unlockCk); }
+                launchRealtime(config, keys, wsAvailable || 0);
+            });
+        };
         updateKeys(function (keys) {
             if(!keys.rtwysiwyg || !keys.events || !keys.userdata) {
                 ErrorBox.show('unavailable');
                 console.error("You are not allowed to create a new realtime session for that document.");
             }
+            var realtime = /*keys.rtwysiwyg_users > 0 || */Loader.isRt;
             if (Object.keys(keys.active).length > 0) {
                 // Should only happen when there is a realtime session with another editor (wiki, inline...)
-                if (keys.rtwysiwyg_users > 0 || Loader.isForced) {
-                    launchRealtime(config, keys);
+                if (keys.rtwysiwyg_users > 0) {
+                    todo(keys, realtime);
                 } else {
                     var callback = function() {
-                        launchRealtime(config, keys);
+                        todo(keys, true);
                     };
                     console.log("Join the existing realtime session or create a new one");
                     Loader.displayModal("rtwysiwyg", Object.keys(keys.active), callback, info);
                 }
             } else {
-                // 3rd argument is "force realtime"
-                var realtime = keys.rtwysiwyg_users > 0 || Loader.isRt;
-                Loader.isRt = realtime;
-                launchRealtime(config, keys, realtime);
+                todo(keys, realtime);
             }
         });
     }

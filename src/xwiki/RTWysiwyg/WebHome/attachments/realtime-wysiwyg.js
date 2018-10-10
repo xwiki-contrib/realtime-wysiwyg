@@ -134,6 +134,7 @@ define([
         var DEMO_MODE = editorConfig.DEMO_MODE;
         var language = editorConfig.language;
         var userAvatar = editorConfig.userAvatarURL;
+        var network = editorConfig.network;
         var saverConfig = editorConfig.saverConfig || {};
         saverConfig.chainpad = Chainpad;
         saverConfig.editorType = 'rtwysiwyg';
@@ -224,25 +225,27 @@ define([
         //Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
         var checked = (Interface.realtimeAllowed()? 'checked="checked"' : '');
 
-        Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
-        // hide the toggle for autosaving while in realtime because it
-        // conflicts with our own autosaving system
-        Interface.setAutosaveHiddenState(true);
+        if (useRt !== 0) {
+            Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
+            // hide the toggle for autosaving while in realtime because it
+            // conflicts with our own autosaving system
+            Interface.setAutosaveHiddenState(true);
 
-        var $disallowButton = $('#' + allowRealtimeCbId);
-        var disallowClick = function () {
-            var checked = $disallowButton[0].checked;
-            //console.log("Value of 'allow realtime collaboration' is %s", checked);
-            if (checked || DEMO_MODE) {
-                Interface.realtimeAllowed(true);
-                // TODO : join the RT session without reloading the page?
-                window.location.href = editorConfig.rtURL;
-            } else {
-                Interface.realtimeAllowed(false);
-                module.onAbort();
-            }
-        };
-        $disallowButton.on('change', disallowClick);
+            var $disallowButton = $('#' + allowRealtimeCbId);
+            var disallowClick = function () {
+                var checked = $disallowButton[0].checked;
+                //console.log("Value of 'allow realtime collaboration' is %s", checked);
+                if (checked || DEMO_MODE) {
+                    Interface.realtimeAllowed(true);
+                    // TODO : join the RT session without reloading the page?
+                    window.location.href = editorConfig.rtURL;
+                } else {
+                    Interface.realtimeAllowed(false);
+                    module.onAbort();
+                }
+            };
+            $disallowButton.on('change', disallowClick);
+        }
 
         if (!Interface.realtimeAllowed()) {
             console.log("Realtime is disallowed. Quitting");
@@ -320,6 +323,7 @@ define([
             iframe.onload = addStyle;
 
             var setEditable = module.setEditable = function (bool) {
+                console.log('SETEDITABLE');
                 window.inner.setAttribute('contenteditable', bool);
             };
 
@@ -500,7 +504,10 @@ define([
                 channel: channel,
 
                 // Crypto object to avoid loading it twice in Cryptpad
-                crypto: Crypto
+                crypto: Crypto,
+
+                // Network loaded in realtime-frontend
+                network: network
             };
 
             var findMacroComments = function(el) {
