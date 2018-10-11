@@ -225,7 +225,7 @@ define([
         //Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
         var checked = (Interface.realtimeAllowed()? 'checked="checked"' : '');
 
-        if (useRt !== 0) {
+        if (useRt !== 0) { // 0 means we can't connect to the websocket service
             Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
             // hide the toggle for autosaving while in realtime because it
             // conflicts with our own autosaving system
@@ -808,7 +808,10 @@ define([
                 console.log("Aborting the session!");
                 var msg = reason || 'disconnected';
                 module.realtime.abort();
-                module.leaveChannel();
+                try {
+                    // Don't break if the channel doesn't exist anymore
+                    module.leaveChannel();
+                } catch (e) {}
                 module.aborted = true;
                 editorConfig.abort();
                 Saver.stop();
@@ -822,6 +825,7 @@ define([
             };
 
             var onConnectionChange = realtimeOptions.onConnectionChange = function (info) {
+                if (module.aborted) { return; }
                 console.log("Connection status : "+info.state);
                 toolbar.failed();
                 if (info.state) {
@@ -835,8 +839,15 @@ define([
             };
 
             var beforeReconnecting = realtimeOptions.beforeReconnecting = function (callback) {
+                var oldChannel = channel;
                 updateKeys(function () {
-                    callback(channel, stringifyDOM(window.inner));
+                    if (channel !== oldChannel) {
+                        editorConfig.onKeysChanged();
+                        setEditable(false);
+                        $disallowButton.prop('checked', false);
+                        onAbort();
+                    }
+                    //callback(channel, stringifyDOM(window.inner));
                 });
             };
 
