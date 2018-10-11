@@ -825,12 +825,12 @@ define([
                 console.log("Connection status : "+info.state);
                 toolbar.failed();
                 if (info.state) {
-                    ErrorBox.hide();
+                    //ErrorBox.hide();
                     initializing = true;
                     toolbar.reconnecting(info.myId);
                 } else {
                     setEditable(false);
-                    ErrorBox.show('disconnected');
+                    //ErrorBox.show('disconnected');
                 }
             };
 
