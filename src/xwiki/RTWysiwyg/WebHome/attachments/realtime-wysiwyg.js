@@ -127,7 +127,6 @@ define([
     };
 
     var main = module.main = function (editorConfig, docKeys, useRt) {
-
         var WebsocketURL = editorConfig.WebsocketURL;
         var htmlConverterUrl = editorConfig.htmlConverterUrl;
         var userName = editorConfig.userName;
@@ -799,6 +798,7 @@ define([
                 console.log("Unlocking editor");
                 initializing = false;
                 setEditable(true);
+                module.realtime.start();
 
                 onLocal();
                 createSaver(info);
@@ -833,6 +833,7 @@ define([
                     initializing = true;
                     toolbar.reconnecting(info.myId);
                 } else {
+                    module.realtime.abort();
                     setEditable(false);
                     //ErrorBox.show('disconnected');
                 }
@@ -847,7 +848,7 @@ define([
                         $disallowButton.prop('checked', false);
                         onAbort();
                     }
-                    //callback(channel, stringifyDOM(window.inner));
+                    callback(channel, stringifyDOM(window.inner));
                 });
             };
 
