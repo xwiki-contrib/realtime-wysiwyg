@@ -4,18 +4,16 @@ define([
     'RTFrontend_realtime_input',
     'RTFrontend_hyperjson',
     'RTFrontend_cursor',
-    'RTFrontend_json_ot',
     'RTFrontend_userdata',
     'RTFrontend_tests',
     'json.sortify',
-    'RTFrontend_text_patcher',
     'RTFrontend_interface',
     'RTFrontend_saver',
     'RTFrontend_chainpad',
     'RTFrontend_crypto',
     'RTFrontend_diffDOM',
     'jquery'
-], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Cursor, JsonOT, UserData, TypingTest, JSONSortify, TextPatcher, Interface, Saver, Chainpad, Crypto) {
+], function (ErrorBox, Toolbar, realtimeInput, Hyperjson, Cursor, UserData, TypingTest, JSONSortify, Interface, Saver, Chainpad, Crypto) {
     var $ = window.jQuery;
     var DiffDom = window.diffDOM;
 
@@ -506,7 +504,10 @@ define([
                 crypto: Crypto,
 
                 // Network loaded in realtime-frontend
-                network: network
+                network: network,
+
+                // OT
+                //patchTransformer: Chainpad.NaiveJSONTransformer
             };
 
             var findMacroComments = function(el) {
@@ -611,9 +612,9 @@ define([
                 var shjson2 = stringifyDOM(window.inner);
                 if (shjson2 !== shjson) {
                     console.error("shjson2 !== shjson");
-                    var diff = TextPatcher.diff(shjson, shjson2);
-                    TextPatcher.log(shjson, diff);
-                    module.patchText(shjson2);
+                    var diff = Chainpad.Diff.diff(shjson, shjson2);
+                    console.log(shjson, diff);
+                    module.chainpad.contentUpdate(shjson2);
                 }
             };
 
@@ -755,14 +756,10 @@ define([
             var onReady = realtimeOptions.onReady = function (info) {
                 if (!initializing) { return; }
 
-                var realtime = window.realtime = module.realtime = info.realtime;
+                module.chainpad = window.chainpad = info.realtime;
                 module.leaveChannel = info.leave;
                 module.realtimeOptions = realtimeOptions;
-                module.patchText = TextPatcher.create({
-                    realtime: realtime,
-                    logging: false,
-                });
-                var shjson = realtime.getUserDoc();
+                var shjson = module.chainpad.getUserDoc();
 
                 myId = info.myId;
 
@@ -798,7 +795,7 @@ define([
                 console.log("Unlocking editor");
                 initializing = false;
                 setEditable(true);
-                module.realtime.start();
+                module.chainpad.start();
 
                 onLocal();
                 createSaver(info);
@@ -807,7 +804,7 @@ define([
             var onAbort = module.onAbort = realtimeOptions.onAbort = function (info, reason, debug) {
                 console.log("Aborting the session!");
                 var msg = reason || 'disconnected';
-                module.realtime.abort();
+                module.chainpad.abort();
                 try {
                     // Don't break if the channel doesn't exist anymore
                     module.leaveChannel();
@@ -833,7 +830,7 @@ define([
                     initializing = true;
                     toolbar.reconnecting(info.myId);
                 } else {
-                    module.realtime.abort();
+                    module.chainpad.abort();
                     setEditable(false);
                     //ErrorBox.show('disconnected');
                 }
@@ -867,9 +864,9 @@ define([
                 if (initializing) { return; }
                 // stringify the json and send it into chainpad
                 var shjson = stringifyDOM(window.inner);
-                module.patchText(shjson);
+                module.chainpad.contentUpdate(shjson);
 
-                if (module.realtime.getUserDoc() !== shjson) {
+                if (module.chainpad.getUserDoc() !== shjson) {
                     console.error("realtime.getUserDoc() !== shjson");
                 }
             };
