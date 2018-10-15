@@ -222,7 +222,10 @@ define([
         //Interface.setLocalStorageDisallow(LOCALSTORAGE_DISALLOW);
         var checked = (Interface.realtimeAllowed()? 'checked="checked"' : '');
 
-        if (useRt !== 0) { // 0 means we can't connect to the websocket service
+        // Don't display the checkbox in the following cases:
+        // * useRt 0 (instead of true/false) => we can't connect to the websocket service
+        // * realtime is disabled and we're not an advanced user
+        if (useRt !== 0 && (useRt || editorConfig.isAdvancedUser)) {
             Interface.createAllowRealtimeCheckbox(allowRealtimeCbId, checked, Messages.allowRealtime);
             // hide the toggle for autosaving while in realtime because it
             // conflicts with our own autosaving system
@@ -237,8 +240,14 @@ define([
                     // TODO : join the RT session without reloading the page?
                     window.location.href = editorConfig.rtURL;
                 } else {
-                    Interface.realtimeAllowed(false);
-                    module.onAbort();
+                    editorConfig.displayDisableModal(function (state) {
+                        if (!state) {
+                            $disallowButton.prop('checked', true);
+                            return;
+                        }
+                        Interface.realtimeAllowed(false);
+                        module.onAbort();
+                    });
                 }
             };
             $disallowButton.on('change', disallowClick);
