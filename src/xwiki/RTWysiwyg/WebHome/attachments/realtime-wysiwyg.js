@@ -853,6 +853,7 @@ define([
                         setEditable(false);
                         $disallowButton.prop('checked', false);
                         onAbort();
+                        return;
                     }
                     callback(channel, stringifyDOM(window.inner));
                 });
