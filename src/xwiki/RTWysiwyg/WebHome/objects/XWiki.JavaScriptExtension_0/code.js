@@ -9,6 +9,11 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     if(!Loader) { return; }
     // VELOCITY
     #set ($document = $xwiki.getDocument('RTWysiwyg.WebHome'))
+    #foreach($e in $services.extension.installed.getInstalledExtensions())
+        #if ($e.toString().contains("rtwysiwyg"))
+            var extVersion = "$e.toString().split('/').get(1)";
+        #end
+    #end
     var PATHS = {
         RTWysiwyg_WebHome_realtime_netflux: "$document.getAttachmentURL('realtime-wysiwyg.js')",
     };
@@ -20,7 +25,10 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     #end
     // END_VELOCITY
 
-    for (var path in PATHS) { PATHS[path] = PATHS[path].replace(/\.js$/, ''); }
+    for (var path in PATHS) {
+        PATHS[path] = PATHS[path].replace(/\.js$/, '');
+        PATHS[path] += (PATHS[path].indexOf('?') === -1 ? '?' : '&') + 'v=' + extVersion;
+    }
     require.config({paths:PATHS});
 
     // XWiki >= 8.2?
