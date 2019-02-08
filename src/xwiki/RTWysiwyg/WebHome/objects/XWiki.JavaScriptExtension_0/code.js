@@ -300,7 +300,19 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                 waiting.append($('<span>', {
                     style: 'vertical-align: middle'
                 }).text(Loader.messages.waiting));
+                var autoForce = $('<div>').appendTo(buttons);
+                var i = 60;
+                var it = setInterval(function () {
+                    i--;
+                    autoForce.html('<br>' + Loader.messages.redirectDialog_autoForce + i + "s");
+                    if (i <= 0) {
+                        clearInterval(it);
+                        window.location.href = Loader.getEditorURL(window.location.href, info);
+                    }
+                }, 1000);
                 Loader.requestRt('wysiwyg', function (state) {
+                    // We've received an answer
+                    clearInterval(it);
                     if (state === false || state === 2) {
                         // false: Nobody in the channel
                         // 2: Rt should already exist
