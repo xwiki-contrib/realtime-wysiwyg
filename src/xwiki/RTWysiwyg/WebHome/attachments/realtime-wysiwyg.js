@@ -255,6 +255,9 @@ define([
 
         if (!useRt) {
             try {
+                // When someone is offline, they may have left their tab open for a long time and
+                // the lock may have disappeared. We're refreshing it when the editor is focused
+                // so that other users will now that someone is editing the document.
                 var whenReady2 = function (editor) {
                     editor.on('focus', function(e) {
                         XWiki.EditLock = new XWiki.DocumentLock();
@@ -665,6 +668,8 @@ define([
                     }
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
+                // When someone leaves, if they used Save&View, it removes the locks from the document.
+                // We're going to add it again to be sure new users will see the lock page and be able to join.
                 var oldUsers = JSON.parse(JSON.stringify(userList.users || []));
                 userList.change.push(function () {
                     if (userList.length === 0) { return; }
