@@ -665,6 +665,18 @@ define([
                     }
                 };
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
+                var oldUsers = JSON.parse(JSON.stringify(userList.users || []));
+                userList.change.push(function () {
+                    if (userList.length === 0) { return; }
+                    // If someone has left, try to get the lock
+                    if (oldUsers.some(function (u) {
+                        return userList.users.indexOf(u) === -1;
+                    })) {
+                        XWiki.EditLock = new XWiki.DocumentLock();
+                        XWiki.EditLock.lock();
+                    }
+                    oldUsers = JSON.parse(JSON.stringify(userList.users || []));
+                });
             };
 
             var getXPath = function (element) {
