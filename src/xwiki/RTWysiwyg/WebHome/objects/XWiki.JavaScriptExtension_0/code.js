@@ -92,12 +92,20 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
         if (createRtCalled) { return; }
         createRtCalled = true;
         if ($saveButton.length) {
+            var comment = $('#commentinput');
+            var old;
+            if (comment.length) {
+                old = comment.val() || '';
+                comment.val(Loader.messages.autoAcceptSave);
+            }
             $saveButton.click();
             var onSaved = function () {
+                if (comment.length) { comment.val(old); }
                 window.location.href = Loader.getEditorURL(window.location.href, info);
             };
             document.observe('xwiki:document:saved', onSaved);
             document.observe('xwiki:document:saveFailed', function () {
+                if (comment.length) { comment.val(old); }
                 setTimeout(function () {
                     $saveButton.click();
                 }, 2000);
