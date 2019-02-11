@@ -106,10 +106,7 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
             document.observe('xwiki:document:saved', onSaved);
             document.observe('xwiki:document:saveFailed', function () {
                 if (comment.length) { comment.val(old); }
-                // TODO: display popup to explain we couldn't save
-                /*setTimeout(function () {
-                    $saveButton.click();
-                }, 2000);*/
+                Loader.displayRequestErrorModal();
             });
         }
     };
