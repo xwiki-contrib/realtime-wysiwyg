@@ -188,8 +188,8 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                     var editor = window.CKEDITOR.instances.content;
                     RTWysiwyg.currentMode = editor.mode;
 
-                    //$('.cke_button__source').remove();
-                    $('.cke_button__source').click(function() {
+                    if (realtime) { $('.cke_button__source').remove(); }
+                    /*$('.cke_button__source').click(function() {
                         // We need to stop autosaving
                         window.lastSaved.wasEditedLocally = false;
                         console.log("Editor mode: " + editor.mode);
@@ -212,7 +212,7 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
                         } else {
                             RTWysiwyg.currentMode = "source";
                         }
-                    });
+                    });*/
                     return;
                 });
                 // End issue tracker icon
