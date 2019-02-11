@@ -253,6 +253,33 @@ define([
             $disallowButton.on('change', disallowClick);
         }
 
+        if (!useRt) {
+            try {
+                var whenReady2 = function (editor) {
+                    editor.on('focus', function(e) {
+                        XWiki.EditLock = new XWiki.DocumentLock();
+                        XWiki.EditLock.lock();
+                    });
+                };
+                var untilThen2 = function () {
+                    if (window.CKEDITOR &&
+                        window.CKEDITOR.instances &&
+                        window.CKEDITOR.instances.content) {
+                        var editor = window.CKEDITOR.instances.content;
+                        if (editor.status === "ready") {
+                            whenReady2(editor, $iframe[0]);
+                        } else {
+                            editor.on('instanceReady', function() { whenReady2(editor); });
+                        }
+                        return;
+                    }
+                    setTimeout(untilThen2, 100);
+                };
+                untilThen2();
+            } catch (e) {}
+        }
+
+
         if (!Interface.realtimeAllowed()) {
             console.log("Realtime is disallowed. Quitting");
             return;
