@@ -100,6 +100,11 @@ require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
             }
             $saveButton.click();
             var onSaved = function () {
+                if (CKEDITOR) {
+                    try {
+                        CKEDITOR.instances.content.resetDirty();
+                    } catch (e) {}
+                }
                 if (comment.length) { comment.val(old); }
                 window.location.href = Loader.getEditorURL(window.location.href, info);
             };
