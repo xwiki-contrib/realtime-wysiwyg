@@ -1,4 +1,5 @@
 (function() {
+
 var DEMO_MODE = "$!request.getParameter('demoMode')" || false;
 DEMO_MODE = (DEMO_MODE === true || DEMO_MODE === "true") ? true : false;
 // Not in edit mode?
@@ -12,6 +13,11 @@ if (!DEMO_MODE && window.XWiki.contextaction !== 'edit') { return false; }
 var path = "$xwiki.getURL('RTFrontend.LoadEditors','jsx')" + '?minify=false&demoMode='+DEMO_MODE+'&v='+extVersion;
 var pathErrorBox = "$xwiki.getURL('RTFrontend.ErrorBox','jsx')" + '?';
 require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
+    // Protect against ckeditor cache on firefox
+    if (sessionStorage.refreshCk) {
+        jQuery('#edit')[0].reset();
+        sessionStorage.refreshCk = "";
+    }
     if(!Loader) { return; }
     // VELOCITY
     var PATHS = {
