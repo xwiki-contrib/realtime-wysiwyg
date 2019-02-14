@@ -361,6 +361,11 @@ define([
             var setEditable = module.setEditable = function (bool) {
                 console.log('SETEDITABLE');
                 window.inner.setAttribute('contenteditable', bool);
+                if (bool) {
+                    $('.buttons [name^="action_save"], .buttons [name^="action_preview"]').removeAttr('disabled');
+                } else {
+                    $('.buttons [name^="action_save"], .buttons [name^="action_preview"]').attr('disabled', 'disabled');
+                }
             };
 
             // don't let the user edit until the pad is ready
