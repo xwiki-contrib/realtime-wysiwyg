@@ -15,7 +15,11 @@ var pathErrorBox = "$xwiki.getURL('RTFrontend.ErrorBox','jsx')" + '?';
 require([path, pathErrorBox, 'jquery'], function(Loader, ErrorBox, $) {
     // Protect against ckeditor cache on firefox
     if (sessionStorage.refreshCk) {
-        jQuery('#edit')[0].reset();
+        if (jQuery('#edit').length) {
+            try {
+                jQuery('#edit')[0].reset();
+            } catch (e) {}
+        }
         sessionStorage.refreshCk = "";
     }
     if(!Loader) { return; }
