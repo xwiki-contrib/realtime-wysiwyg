@@ -675,7 +675,7 @@ define([
                 toolbar = Toolbar.create($bar, info.myID, info.realtime, info.getLag, info.userList, config, toolbar_style);
                 // When someone leaves, if they used Save&View, it removes the locks from the document.
                 // We're going to add it again to be sure new users will see the lock page and be able to join.
-                var oldUsers = JSON.parse(JSON.stringify(userList.users || []));
+                var oldUsers = JSON.parse(JSON.stringify(userList.users || []));
                 userList.change.push(function () {
                     if (userList.length === 0) { return; }
                     // If someone has left, try to get the lock
@@ -685,7 +685,7 @@ define([
                         XWiki.EditLock = new XWiki.DocumentLock();
                         XWiki.EditLock.lock();
                     }
-                    oldUsers = JSON.parse(JSON.stringify(userList.users || []));
+                    oldUsers = JSON.parse(JSON.stringify(userList.users || []));
                 });
             };
 
