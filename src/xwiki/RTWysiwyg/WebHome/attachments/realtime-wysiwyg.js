@@ -300,14 +300,14 @@ define([
             var initializing = true;
 
             //editor.plugins.magicline.backdoor.that.line.$.setAttribute('class', 'rt-non-realtime');
-            var ml = editor.plugins.magicline.backdoor.that.line.$;
+            var ml = (editor.plugins.magicline.backdoor) ? editor.plugins.magicline.backdoor.that.line.$ : editor._.magiclineBackdoor.that.line.$;
             [ml, ml.parentElement].forEach(function (el) {
                 el.setAttribute('class', 'rt-non-realtime');
             }); 
             // Fix the magic line issue
             var fixMagicLine = function () {
                 if (editor.plugins.magicline) {
-                    var ml = editor.plugins.magicline.backdoor.that.line.$;
+                    var ml = (editor.plugins.magicline.backdoor) ? editor.plugins.magicline.backdoor.that.line.$ : editor._.magiclineBackdoor.that.line.$;
                     [ml, ml.parentElement].forEach(function (el) {
                         el.setAttribute('class', 'rt-non-realtime');
                     });
